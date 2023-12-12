@@ -1,0 +1,13 @@
+Index: nagios-plugins-contrib/check_redis/check_redis.pl
+===================================================================
+--- nagios-plugins-contrib.orig/check_redis/check_redis.pl
++++ nagios-plugins-contrib/check_redis/check_redis.pl
+@@ -2654,7 +2654,7 @@ $start_time = [ Time::HiRes::gettimeofda
+ $redis = Redis-> new ( server => $dsn, 'debug' => (defined($o_verb))?1:0 );
+ 
+ if ($PASSWORD) {
+-    $redis->auth($PASSWORD);
++    $redis->auth(split(' ', $PASSWORD));
+ }
+ if ($DATABASE) {
+     $redis->select($DATABASE);
