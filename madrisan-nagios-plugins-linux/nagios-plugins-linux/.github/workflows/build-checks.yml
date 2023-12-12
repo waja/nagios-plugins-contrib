@@ -16,15 +16,12 @@ jobs:
       fail-fast: false
       matrix:
         container:
-          - 'alpine:3.14'
-          - 'alpine:3.15'
-          - 'alpine:3.16'
-          - 'debian:9'
-          - 'debian:10'
+          - 'alpine:3.17'
+          - 'alpine:3.18'
           - 'debian:11'
-          - 'fedora:34'
-          - 'fedora:35'
-          - 'fedora:36'
+          - 'debian:12'
+          - 'fedora:38'
+          - 'fedora:39'
           - 'ubuntu:20.04'
           - 'ubuntu:22.04'
 
@@ -41,18 +38,26 @@ jobs:
             debian*|ubuntu*)
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -q
-              apt-get install -q -y --no-install-recommends autoconf automake bzip2 gcc libcurl4-gnutls-dev libtool m4 make pkg-config xz-utils
+              apt-get install -q -y --no-install-recommends autoconf automake bzip2 gcc libcurl4-gnutls-dev libsystemd-dev libtool m4 make pkg-config xz-utils
             ;;
             fedora*)
               dnf -y update
-              dnf -y install autoconf automake bzip2 gcc glibc-devel libcurl-devel libvarlink-devel libtool make m4 xz
+              dnf -y install autoconf automake bzip2 diffutils gcc glibc-devel libcurl-devel libvarlink-devel libtool make m4 systemd-devel xz
             ;;
           esac
 
       - id: configure
         run: |
           autoreconf --install
-          ./configure --enable-debug
+          case "${{ matrix.container }}" in
+            alpine*|debian*|ubuntu*)
+              ./configure --enable-libcurl --enable-debug
+            ;;
+            # libvarlink is only available in Fedora
+            *)
+              ./configure --enable-libcurl --enable-libvarlink --enable-debug
+            ;;
+          esac
 
       - id: make
         run: |

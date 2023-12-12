@@ -337,25 +337,43 @@ AC_CHECK_DECLS([CPU_ALLOC], [], [],
 
 dnl Check for libcurl
 AC_ARG_ENABLE([libcurl],
-  AS_HELP_STRING([--disable-libcurl], [Disable libcurl]))
-AS_IF([test "x$enable_libcurl" != "xno"], [
-  LIBCURL_CHECK_CONFIG([], 7.40.0, [],
-    [AC_MSG_WARN([Missing required libcurl >= 7.40.0])])
+  AS_HELP_STRING([--enable-libcurl], [Enable libcurl]))
+AS_IF([test "x$enable_libcurl" = "xyes"], [
+  LIBCURL_CHECK_CONFIG([], [7.40.0], [],
+    [AC_MSG_ERROR([Missing required libcurl >= 7.40.0])])
   AC_SUBST([LIBCURL_CPPFLAGS])
   AC_SUBST([LIBCURL])
   AM_CONDITIONAL(HAVE_LIBCURL, [test "$libcurl_cv_lib_curl_usable" = "yes"])
 ], [AM_CONDITIONAL(HAVE_LIBCURL, false)])
 
+dnl Check for systemd-login libraries
+AC_ARG_WITH([systemd],
+  AS_HELP_STRING([--without-systemd], [do not build with systemd support]),
+  [], [with_systemd=check]
+)
+have_systemd=no
+AS_IF([test "x$with_systemd" != "xno"], [
+  PKG_CHECK_MODULES([SYSTEMD], [libsystemd], [have_systemd=yes], [have_systemd=no])
+  AS_CASE([$with_systemd:$have_systemd],
+    [yes:no],
+      [AC_MSG_ERROR([systemd expected but libsystemd not found])],
+    [*:yes],
+       AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define if libsystemd is available])
+       AC_DEFINE([USE_SYSTEMD], [1], [Define if systemd support is wanted ])
+  )
+])
+AM_CONDITIONAL([HAVE_SYSTEMD], [test "x$have_systemd" = "xyes"])
+
 dnl Check for libvarlink
 AC_ARG_ENABLE([libvarlink],
-  AS_HELP_STRING([--disable-libvarlink], [Disable libvarlink]))
-AS_IF([test "x$enable_libvarlink" != "xno"], [
+  AS_HELP_STRING([--enable-libvarlink], [Enable libvarlink]))
+AS_IF([test "x$enable_libvarlink" = "xyes"], [
   PKG_CHECK_EXISTS([libvarlink],
     [PKG_CHECK_MODULES(LIBVARLINK, [libvarlink >= 18],
       [AC_DEFINE(HAVE_LIBVARLINK, 1, [Define if libvarlink is available])
        have_libvarlink=yes],
-      AC_MSG_ERROR([*** libvarlink version 18 or better not found]))])
-])
+      [AC_MSG_ERROR([*** libvarlink version 18 or better not found])])],
+    [AC_MSG_ERROR([*** libvarlink not found])])])
 AM_CONDITIONAL(HAVE_LIBVARLINK, [test "$have_libvarlink" = "yes"])
 
 dnl Check for the procps newlib
@@ -566,18 +584,23 @@ echo "  LDFLAGS            = $LDFLAGS"
 echo
 
 if test "$have_libprocps" = "yes"; then
+  echo "Optional procps-ng library support is enabled:"
   echo "  LIBPROCPS_CFLAGS   = $LIBPROCPS_CFLAGS"
   echo "  LIBPROCPS_LIBS     = $LIBPROCPS_LIBS"
   echo
 fi
 
 if test "$libcurl_cv_lib_curl_usable" = "yes"; then
+  echo "Optional curl library support is enabled (required by check_docker):"
   echo "  LIBCURL_CPPFLAGS   = $LIBCURL_CPPFLAGS"
   echo "  LIBCURL            = $LIBCURL"
   echo
 fi
 
 if test "$have_libvarlink" = "yes"; then
+  echo "Optional varlink library support is enabled (required by check_podman):"
+  echo "  LIBVARLINK_CFLAGS  = $LIBVARLINK_CFLAGS"
+  echo "  LIBVARLINK_LIBS    = -lvarlink"
   echo "  VARLINK_ADDRESS    = $VARLINK_ADDRESS"
   echo
 fi

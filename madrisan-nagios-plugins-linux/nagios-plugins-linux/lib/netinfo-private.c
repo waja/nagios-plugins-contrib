@@ -135,8 +135,8 @@ check_link_speed (const char *ifname, uint32_t *speed, uint8_t *duplex)
 #ifdef ETHTOOL_GLINKSETTINGS
 # define ETHTOOL_LINK_MODE_MASK_MAX_KERNEL_NU32  (SCHAR_MAX)
   struct elinkset {
-    struct ethtool_link_settings req;
     uint32_t link_mode_data[3 * ETHTOOL_LINK_MODE_MASK_MAX_KERNEL_NU32];
+    struct ethtool_link_settings req;
   } elinkset;
 #endif
 
@@ -260,7 +260,7 @@ get_rtnl_fd ()
   memset (&u.local, 0, sizeof (u.local));
   u.local.nl_family = AF_NETLINK;
   u.local.nl_groups = 0;
-  u.local.nl_pid = getpid ();
+  u.local.nl_pid = 0;
 
   if (bind (fd, &u.addr, sizeof (u.addr)) < 0)
     {

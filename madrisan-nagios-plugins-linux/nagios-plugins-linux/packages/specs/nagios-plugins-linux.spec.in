@@ -28,6 +28,8 @@ Requires: nagios-plugins-linux-clock
 Requires: nagios-plugins-linux-cpu
 Requires: nagios-plugins-linux-cpufreq
 Requires: nagios-plugins-linux-cswch
+Requires: nagios-plugins-linux-fc
+Requires: nagios-plugins-linux-filecount
 Requires: nagios-plugins-linux-ifmountfs
 Requires: nagios-plugins-linux-intr
 Requires: nagios-plugins-linux-iowait
@@ -91,6 +93,13 @@ Group: Applications/System
 
 %description fc
 This Nagios plugin monitors the status of the fiber status ports.
+
+%package filecount
+Summary: Nagios plugins for Linux - check_filecount
+Group: Applications/System
+
+%description filecount
+This Nagios plugin checks the number of files found in one or more directories.
 
 %package ifmountfs
 Summary: Nagios plugins for Linux - check_ifmountfs
@@ -218,6 +227,10 @@ This Nagios plugin displays the number of users that are currently logged on.
 
 %build
 %configure --libexecdir=%{_libdir}/nagios/plugins \
+   --enable-libcurl \
+%if 0%{?have_libvarlink}
+   --enable-libvarlink \
+%endif
 %if 0%{?rhel} < 7
    --with-socketfile=/var/run/multipathd.sock
 %endif
@@ -257,6 +270,10 @@ make DESTDIR=%{buildroot} install
 %files fc
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_fc
+
+%files filecount
+%defattr(-,root,root)
+%{_libdir}/nagios/plugins/check_filecount
 
 %files ifmountfs
 %defattr(-,root,root)
@@ -330,6 +347,5 @@ make DESTDIR=%{buildroot} install
 %{_libdir}/nagios/plugins/check_users
 
 %changelog
-
 * @date@ Davide Madrisan <davide.madrisan@gmail.com> @version@-@release@
 - Upstream version @version@

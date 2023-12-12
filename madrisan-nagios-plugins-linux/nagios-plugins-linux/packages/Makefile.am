@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
-## Copyright (c) 2016-2019 Davide Madrisan <davide.madrisan@gmail.com>
+## Copyright (c) 2016-2024 Davide Madrisan <davide.madrisan@gmail.com>
 ##
 ## This program is free software: you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published by
@@ -33,26 +33,31 @@ MULTIBUILD_OPTS = \
 	--pckver $(PACKAGE_VERSION)
 
 TARGETS_ALPINE = \
-	alpine-3.14 \
-	alpine-3.15 \
-	alpine-3.16
-alpine-latest: alpine-3.16
+	alpine-3.16 \
+	alpine-3.17 \
+	alpine-3.18
+alpine-latest: alpine-3.18
 
 TARGETS_CENTOS_STREAM = \
 	centos-stream-8 centos-stream-9
 centos-stream-latest: centos-stream-9
 
 TARGETS_DEBIAN = \
-	debian-stretch debian-buster debian-bullseye
-debian-9: debian-stretch
+	debian-buster debian-bullseye debian-bookworm
 debian-10: debian-buster
 debian-11: debian-bullseye
-debian-latest: debian-bullseye
+debian-12: debian-bookworm
+debian-latest: debian-bookworm
 
-TARGETS_REDHAT = \
-	fedora-34 fedora-35 fedora-36 \
+TARGETS_FEDORA = \
+	fedora-37 fedora-38 fedora-39 \
 	fedora-rawhide
-fedora-latest: fedora-36
+fedora-latest: fedora-39
+
+TARGETS_ROCKY = \
+	rockylinux-8 \
+	rockylinux-9
+rockylinux-latest: rockylinux-9
 
 .PHONY: specfile
 specfile:
@@ -79,7 +84,13 @@ $(TARGETS_DEBIAN): source-archive $(DOCKER) $(MULTIBUILD_SCRIPT)
 	$(SHELL) $(MULTIBUILD_SCRIPT) $(MULTIBUILD_OPTS) \
 	   --os $$distr --target pcks/$@
 
-$(TARGETS_REDHAT): specfile source-archive $(DOCKER) $(MULTIBUILD_SCRIPT)
+$(TARGETS_FEDORA): specfile source-archive $(DOCKER) $(MULTIBUILD_SCRIPT)
+	@distr=`echo $@ | sed s/-/:/`; \
+	$(SHELL) $(MULTIBUILD_SCRIPT) $(MULTIBUILD_OPTS) \
+	   --spec $(multibuilddir)/specs/$(SPECFILE) \
+	   --os $$distr --target pcks/$@
+
+$(TARGETS_ROCKY): specfile source-archive $(DOCKER) $(MULTIBUILD_SCRIPT)
 	@distr=`echo $@ | sed s/-/:/`; \
 	$(SHELL) $(MULTIBUILD_SCRIPT) $(MULTIBUILD_OPTS) \
 	   --spec $(multibuilddir)/specs/$(SPECFILE) \
