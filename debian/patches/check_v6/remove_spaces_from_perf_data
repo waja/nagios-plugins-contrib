@@ -1,0 +1,13 @@
+Index: nagios-plugins-contrib/check_v46/check_v46
+===================================================================
+--- nagios-plugins-contrib.orig/check_v46/check_v46
++++ nagios-plugins-contrib/check_v46/check_v46
+@@ -165,7 +165,7 @@ foreach my $p (@protocols) {
+ 
+         # Strip off performance data from the $first line of plugin
+         # output.
+-        $first =~ s/^([^\|]+)\|(.*)/$1/;
++        $first =~ s/^([^\|]+)\|\s*(.*)/$1/;
+         $out->{$p}->{$a}->{first} = $first;
+ 
+         # Add lc($p) as prefix to performance data labels, e.g.
