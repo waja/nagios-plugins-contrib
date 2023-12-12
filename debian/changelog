@@ -1,8 +1,12 @@
-nagios-plugins-contrib (44.20231013) UNRELEASED; urgency=medium
+nagios-plugins-contrib (45.20231212) unstable; urgency=medium
 
-  * 
+  [ Bernd Zeimetz ]
+  * [0b8a7ff] check_redis: add acl support
+  * [b663d9f] check_v46: remove leading spaces from perf data
+    github #84
+  * [9f95871] Update madrisan nagios plugins
 
- -- Jan Wagner <waja@cyconet.org>  Thu, 12 Oct 2023 16:53:27 +0200
+ -- Bernd Zeimetz <bzed@debian.org>  Tue, 12 Dec 2023 11:13:34 +0100
 
 nagios-plugins-contrib (44.20231012) unstable; urgency=medium
 
