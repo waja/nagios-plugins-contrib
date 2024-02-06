@@ -9,7 +9,7 @@ Build-Depends: debhelper (>= 8.0.0),
                dh-sequence-python3,
                python3:any, python3-debian:native,
                quilt (>= 0.46-7),
-               autotools-dev, flex, libmemcached-dev [!hurd-i386], pkg-config
+               autotools-dev, flex, libmemcached-dev [!hurd-i386], pkgconf
 Standards-Version: 4.6.2
 Vcs-Git: https://salsa.debian.org/nagios-team/nagios-plugins-contrib.git
 Vcs-Browser: https://salsa.debian.org/nagios-team/nagios-plugins-contrib
