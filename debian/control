@@ -244,12 +244,3 @@ Description: Plugins for nagios compatible monitoring systems
  .
  Some scripts and binaries need more packages installed to work, which is
  implemented as recommends.
-
-Package: nagios-plugins-contrib
-Architecture: any
-Depends: monitoring-plugins-contrib, ${misc:Depends}
-Description: Transitional package for monitoring-plugins-contrib
- nagios-plugins-contrib was renamed to monitoring-plugins-contrib.
- .
- This is a transitional package. It can safely be removed.
-Section: oldlibs
