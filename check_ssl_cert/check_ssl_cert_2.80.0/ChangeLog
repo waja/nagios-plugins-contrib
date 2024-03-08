@@ -1,3 +1,48 @@
+2024-02-26
+
+	* check_ssl_cert: Add support to ignore unclean TLS shutdowns
+
+2024-01-17  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (append_warning_message): Removed the port in the error messages if we are checking a file
+
+2024-01-14  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert: Added support for SIPS
+
+2023-12-11  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert: Corrected a function name causing a crash with OCSP checks and -verbose
+        * check_ssl_cert: Better error message for curl errors
+
+2023-11-30  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert: Added QUIC support
+
+2023-11-21  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (main): Support for LibreSSL and IP addresses
+
+2023-11-27  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (parse_command_line_options): allow uppercase protocols
+
+2023-11-23  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (main): Added support for MQTTS
+
+2023-11-21  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (hours_until): do not complain if LONG_BIT is not available (OpenBSD)
+
+2023-10-30  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (info): --info output at the endw
+
+2023-10-21  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (main): Added a check if --file is a directory
+
 2023-09-27  Matteo Corti  <matteo@corti.li>
 
         * check_ssl_cert (exec_with_timeout): Global elapsed time considered for the timeout

@@ -8,7 +8,7 @@
 # See the INSTALL.md file for installation instructions
 #
 # Copyright (c) 2007-2012 ETH Zurich <matteo.corti@ethz.ch>
-# Copyright (c) 2007-2023 Matteo Corti <matteo@corti.li>
+# Copyright (c) 2007-2024 Matteo Corti <matteo@corti.li>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 ################################################################################
 # Constants
 
-VERSION=2.75.0
+VERSION=2.80.0
 SHORTNAME="SSL_CERT"
 
 VALID_ATTRIBUTES=",startdate,enddate,subject,issuer,modulus,serial,hash,email,ocsp_uri,fingerprint,"
@@ -178,7 +178,7 @@ fetch_http_headers() {
         # -L (--location): follow redirects
         # -k (--insecure): ignore TLS problems (we want to check the headers anyway)
         # -o (--output): discard the output (we are only interested in the HTTP headers)
-        exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_RESOLVE} ${CURL_PROXY_ARGUMENT} ${INETPROTO} -k -s -D- -A '${HTTP_USER_AGENT}' -o /dev/null -L https://${HOST}${path}" "${CACHED_HEADERS}"
+        exec_with_timeout "${CURL_BIN} ${CURL_QUIC} ${CURL_PROXY} ${CURL_RESOLVE} ${CURL_PROXY_ARGUMENT} ${INETPROTO} -k -s -D- -A '${HTTP_USER_AGENT}' -o /dev/null -L https://${HOST}${path}" "${CACHED_HEADERS}"
         RET=$?
 
         if [ "${RET}" -ne 0 ]; then
@@ -400,6 +400,7 @@ usage() {
     echo "      --ignore-ssl-labs-errors     Ignore errors if SSL Labs is not"
     echo "                                   accessible or times out"
     echo "      --ignore-tls-renegotiation   Ignore the TLS renegotiation check"
+    echo "      --ignore-unexpected-eof      Ignore unclean TLS shutdowns"
     echo "      --inetproto protocol         Force IP version 4 or 6"
     echo "      --info                       Print certificate information"
     echo "      --init-host-cache            Initialize the host cache"
@@ -423,7 +424,7 @@ usage() {
     echo "                                   'all' will include all the available"
     echo "                                   attributes."
     # Delimiter at 78 chars ############################################################
-    echo "   -m,--match.                     Pattern to match the CN or AltName"
+    echo "   -m,--match                      Pattern to match the CN or AltName"
     echo "                                   (can be specified multiple times)"
     echo "      --maximum-validity [days]    The maximum validity of the certificate"
     echo "                                   must not exceed 'days' (default 397)"
@@ -463,10 +464,10 @@ usage() {
     echo "                                   integers, 2 otherwise"
     echo "   -P,--protocol protocol          Use the specific protocol:"
     echo "                                   dns, ftp, ftps, http, https (default),"
-    echo "                                   h2 (HTTP/2), imap, imaps, irc, ircs, ldap,"
-    echo "                                   ldaps, mysql, pop3, pop3s, postgres,"
-    echo "                                   sieve, smtp, smtps, tds, xmpp,"
-    echo "                                   xmpp-server."
+    echo "                                   h2 (HTTP/2), h3 (HTTP/3), imap, imaps,"
+    echo "                                   irc, ircs, ldap, ldaps, mqtts, mysql,"
+    echo "                                   pop3, pop3s, postgres, sieve, sips, smtp,"
+    echo "                                   smtps, tds, xmpp, xmpp-server."
     echo "                                   ftp, imap, irc, ldap, pop3, postgres,"
     echo "                                   sieve, smtp: switch to TLS using StartTLS"
     echo "      --password source            Password source for a local certificate,"
@@ -477,6 +478,7 @@ usage() {
     echo "                                   option"
     echo "      --python-bin path            Path of the python binary to be used"
     # Delimiter at 78 chars ############################################################
+    echo "      --quic                       Use QUIC"
     echo "   -q,--quiet                      Do not produce any output"
     # Delimiter at 78 chars ############################################################
     echo "   -r,--rootcert path              Root certificate or directory to be used"
@@ -662,9 +664,17 @@ info() {
     VALUE=$2
 
     if [ -n "${INFO}" ] && [ -n "${VALUE}" ]; then
-        printf '%s\t%s\n' "${LABEL}" "${VALUE}" | expand -t 32
+        if [ -n "${INFO_OUTPUT}" ] ; then
+            INFO_OUTPUT="${INFO_OUTPUT}$( printf '\n%s\t%s\n' "${LABEL}" "${VALUE}" | expand -t 32 )"
+        else
+            INFO_OUTPUT="$( printf '%s\t%s\n' "${LABEL}" "${VALUE}" | expand -t 32 )"
+        fi
     elif [ -n "${INFO}" ]; then
-        printf '%s\n' "${LABEL}"
+        if [ -n "${INFO_OUTPUT}" ] ; then
+            INFO_OUTPUT="${INFO_OUTPUT}$( printf '\n%s\n' "${LABEL}" )"
+        else
+            INFO_OUTPUT="$( printf '%s\n' "${LABEL}" )"
+        fi
     fi
 
 }
@@ -838,14 +848,18 @@ hours_until() {
     # we check if we are on a 32 bit system and if the date is beyond the max date
     # we simplify and consider a date invalid after 1.1.2038 instead of 19.1.2038
     # since date is not able to parse the date we do it manually with a little bit of heuristics ...
-    LONG_BIT_TMP="$(getconf LONG_BIT)"
-    if [ "${LONG_BIT_TMP}" -eq 32 ]; then
-        debuglog "32 bit system"
-        CERT_YEAR=$(echo "${DATE}" | sed 's/.* \(2[0-9][0-9][0-9]\).*/\1/')
-        debuglog "Checking if the year ${CERT_YEAR} is beyond the max date for the system 2038-01-19"
-        if [ "${CERT_YEAR}" -gt 2038 ]; then
-            verboselog "${DATE} is beyond the maximum date on a 32 bit system: we consider 2038-01-19"
-            DATE='Jan 19 00:00:00 2038 GMT'
+    LONG_BIT_TMP="$(getconf LONG_BIT 2> /dev/null)"
+    if [ -z "${LONG_BIT_TMP}" ] ; then
+        debuglog "Cannot detect system architecture: no LONGBIT"
+    else
+        if [ "${LONG_BIT_TMP}" -eq 32 ]; then
+            debuglog "32 bit system"
+            CERT_YEAR=$(echo "${DATE}" | sed 's/.* \(2[0-9][0-9][0-9]\).*/\1/')
+            debuglog "Checking if the year ${CERT_YEAR} is beyond the max date for the system 2038-01-19"
+            if [ "${CERT_YEAR}" -gt 2038 ]; then
+                verboselog "${DATE} is beyond the maximum date on a 32 bit system: we consider 2038-01-19"
+                DATE='Jan 19 00:00:00 2038 GMT'
+            fi
         fi
     fi
 
@@ -1086,7 +1100,7 @@ prepend_critical_message() {
             fi
         fi
     fi
-    if [ -n "${PORT}" ]; then
+    if [ -z "${FILE}" ] && [ -n "${PORT}" ]; then
         tmp="${tmp}:${PORT}"
     fi
 
@@ -1286,7 +1300,7 @@ append_warning_message() {
             fi
         fi
     fi
-    if [ -n "${PORT}" ]; then
+    if [ -z "${FILE}" ] && [ -n "${PORT}" ]; then
         tmp="${tmp}:${PORT}"
     fi
 
@@ -1557,8 +1571,8 @@ extract_cert_attribute() {
     # shellcheck disable=SC2086,SC2016
     case $1 in
     cn)
-        if echo "${cert_content}" | "${OPENSSL}" x509 -noout ${OPENSSL_PARAMS} -subject 2>/dev/null | "${GREP_BIN}" -F -q 'CN' >/dev/null; then
-            echo "${cert_content}" | "${OPENSSL}" x509 -noout ${OPENSSL_PARAMS} -subject |
+        if echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout ${OPENSSL_PARAMS} -subject 2>/dev/null | "${GREP_BIN}" -F -q 'CN' >/dev/null; then
+            echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout ${OPENSSL_PARAMS} -subject |
                 sed -e "s/^.*[[:space:]]*CN[[:space:]]=[[:space:]]//" -e 's/\/[[:alpha:]][[:alpha:]]*=.*$//' -e "s/,.*//"
         else
             echo 'CN unavailable'
@@ -1567,76 +1581,76 @@ extract_cert_attribute() {
         ;;
     subject)
         # the Subject could contain UTF-8 characters
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout ${OPENSSL_PARAMS} -subject -nameopt utf8
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout ${OPENSSL_PARAMS} -subject -nameopt utf8
         ;;
     serial)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -serial | sed -e "s/^serial=//"
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -serial | sed -e "s/^serial=//"
         ;;
     fingerprint)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -fingerprint -sha1 | sed -e "s/^SHA1 Fingerprint=//"
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -fingerprint -sha1 | sed -e "s/^SHA1 Fingerprint=//"
         ;;
     oscp_uri)
-        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -ocsp_uri
+        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -ocsp_uri
         ;;
     oscp_uri_single)
         extract_cert_attribute 'oscp_uri' "${cert_content}" | head -n 1
         ;;
     hash)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -hash
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -hash
         ;;
     modulus)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -modulus
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -modulus
         ;;
     issuer)
         # see https://unix.stackexchange.com/questions/676776/parse-comma-separated-string-ignoring-commas-between-quotes
-        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout -nameopt sep_multiline,utf8,esc_ctrl -issuer |
+        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout -nameopt sep_multiline,utf8,esc_ctrl -issuer |
             tail -n +2 |
             sed 's/^ *//'
         ;;
     issuer_uri)
-        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -F "CA Issuers" | "${GREP_BIN}" -F -i "http" | sed -e "s/^.*CA Issuers - URI://" | tr -d '"!|;${}<>`&'
+        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -F "CA Issuers" | "${GREP_BIN}" -F -i "http" | sed -e "s/^.*CA Issuers - URI://" | tr -d '"!|;${}<>`&'
         ;;
     issuer_uri_single)
         extract_cert_attribute 'issuer_uri' "${cert_content}" | head -n 1
         ;;
     issuer_hash)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -issuer_hash
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -issuer_hash
         ;;
     org)
-        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -nameopt utf8 -noout -subject)
+        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -nameopt utf8 -noout -subject)
         parse_subject "O" "${cert_subject}"
         ;;
     org_unit)
-        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -nameopt utf8 -noout -subject)
+        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -nameopt utf8 -noout -subject)
         parse_subject "OU" "${cert_subject}"
         ;;
     key_length)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -text | "${GREP_BIN}" 'Public-Key:' | sed -e 's/.*(//' | sed -e 's/).*//'
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -text | "${GREP_BIN}" 'Public-Key:' | sed -e 's/.*(//' | sed -e 's/).*//'
         ;;
     country)
-        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -nameopt utf8 -noout -subject)
+        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -nameopt utf8 -noout -subject)
         parse_subject "C" "${cert_subject}"
         ;;
     state)
-        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -nameopt utf8 -noout -subject)
+        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -nameopt utf8 -noout -subject)
         parse_subject "ST" "${cert_subject}"
         ;;
     locality)
-        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -nameopt utf8 -noout -subject)
+        cert_subject=$(echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -nameopt utf8 -noout -subject)
         parse_subject "L" "${cert_subject}"
         ;;
     email)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -email
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -email
         ;;
     crl_uri)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -text |
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -text |
             "${GREP_BIN}" -A 4 'X509v3 CRL Distribution Points' |
             "${GREP_BIN}" 'URI:' |
             sed 's/.*URI://' |
             head -n 1
         ;;
     version)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -text | "${GREP_BIN}" Version | head -n 1 | sed 's/.*Version: //'
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -text | "${GREP_BIN}" Version | head -n 1 | sed 's/.*Version: //'
         ;;
 
     pub_key_algo)
@@ -1646,9 +1660,9 @@ extract_cert_attribute() {
         #
         #  see https://security.stackexchange.com/questions/141661/whats-the-difference-between-public-key-algorithm-and-signature-algorithm-i
 
-        ALGORITHM=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Public Key Algorithm' | sed -e 's/.*: //')
+        ALGORITHM=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Public Key Algorithm' | sed -e 's/.*: //')
 
-        PUBLIC_KEY=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Signature' | sed 's/.*: //')
+        PUBLIC_KEY=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Signature' | sed 's/.*: //')
 
         echo "${ALGORITHM} ${PUBLIC_KEY}"
         ;;
@@ -1660,24 +1674,24 @@ extract_cert_attribute() {
         #
         #  see https://security.stackexchange.com/questions/141661/whats-the-difference-between-public-key-algorithm-and-signature-algorithm-i
 
-        ALGORITHM=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Signature Algorithm' | sed -e 's/.*: //')
+        ALGORITHM=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Signature Algorithm' | sed -e 's/.*: //')
 
-        PUBLIC_KEY=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Public-Key' | sed 's/.*: //')
+        PUBLIC_KEY=$(echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -text | "${GREP_BIN}" -m 1 -F 'Public-Key' | sed 's/.*: //')
 
         echo "${ALGORITHM} ${PUBLIC_KEY}"
         ;;
 
     startdate)
-        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} -startdate | sed -e "s/^notBefore=//"
+        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -startdate | sed -e "s/^notBefore=//"
         ;;
     enddate)
-        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -noout ${OPENSSL_PARAMS} "${OPENSSL_ENDDATE_OPTION}" | sed -e "s/^notAfter=//" -e "s/^nextUpdate=//"
+        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} "${OPENSSL_ENDDATE_OPTION}" | sed -e "s/^notAfter=//" -e "s/^nextUpdate=//"
         ;;
     sct)
-        echo "${cert_content}" | "${OPENSSL}" x509 -noout -text | "${GREP_BIN}" -E -q 'SCTs|1\.3\.6\.1\.4\.1\.11129\.2\.4\.2'
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -text | "${GREP_BIN}" -E -q 'SCTs|1\.3\.6\.1\.4\.1\.11129\.2\.4\.2'
         ;;
     subjectAlternativeName)
-        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" ${OPENSSL_PARAMS} -text |
+        echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" ${OPENSSL_PARAMS} -in /dev/stdin -text |
             "${GREP_BIN}" -F -A 1 "509v3 Subject Alternative Name:" |
             tail -n 1 |
             sed -e "s/DNS://g" |
@@ -1686,7 +1700,7 @@ extract_cert_attribute() {
             sed -e 's/^ *//'
         ;;
     keyUsage)
-        KEY_USAGE_TMP=$(echo "${cert_content}" | "${OPENSSL}" x509 -noout -ext keyUsage 2>&1)
+        KEY_USAGE_TMP=$(echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -ext keyUsage 2>&1)
         if echo "${KEY_USAGE_TMP}" | "${GREP_BIN}" -q 'No extensions in certificate'; then
             echo
         else
@@ -1892,9 +1906,9 @@ check_crl() {
 
         TIMEOUT_REASON="fetching CRL"
         if [ -n "${HTTP_USER_AGENT}" ]; then
-            exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${CRL_URI}\\\" > ${CRL_TMP}"
+            exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${CRL_URI}\\\" > ${CRL_TMP}"
         else
-            exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --location \\\"${CRL_URI}\\\" > ${CRL_TMP}"
+            exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC}  ${INETPROTO} --silent --location \\\"${CRL_URI}\\\" > ${CRL_TMP}"
         fi
         unset TIMEOUT_REASON
 
@@ -2021,9 +2035,9 @@ check_ocsp() {
 
                 TIMEOUT_REASON="OCSP: fetching issuer ${ELEMENT_ISSUER_URI}"
                 if [ -n "${HTTP_USER_AGENT}" ]; then
-                    exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
+                    exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
                 else
-                    exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
+                    exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
                 fi
                 unset TIMEOUT_REASON
 
@@ -2059,7 +2073,7 @@ check_ocsp() {
                         open_for_writing "${ISSUER_CERT_TMP2}"
                         cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_TMP2}"
 
-                        ${OPENSSL} x509 -inform DER -outform PEM -in "${ISSUER_CERT_TMP2}" -out "${ISSUER_CERT_TMP}"
+                        ${OPENSSL} x509 -in /dev/stdin -inform DER -outform PEM -in "${ISSUER_CERT_TMP2}" -out "${ISSUER_CERT_TMP}"
 
                     elif "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q 'empty'; then
 
@@ -2213,7 +2227,7 @@ check_ocsp() {
 
                     elif echo "${OCSP_RESP}" | "${GREP_BIN}" -F -q -i "internalerror" && [ -n "${OCSP_IGNORE_ERRORS}" ]; then
 
-                        verbose 'warning: the OCSP server returned an internal error'
+                        verboselog 'warning: the OCSP server returned an internal error'
 
                     elif ! echo "${OCSP_RESP}" | "${GREP_BIN}" -F -q -i "good"; then
 
@@ -2320,9 +2334,9 @@ check_cert_end_date() {
 
         # x509 certificates (default)
         # We always check expired certificates
-        debuglog "executing: ${OPENSSL} x509 -noout -checkend 0 on cert element ${el_number} (${element_cn})"
+        debuglog "executing: ${OPENSSL} x509 -in /dev/stdin -noout -checkend 0 on cert element ${el_number} (${element_cn})"
 
-        if ! echo "${1}" | ${OPENSSL} x509 -noout -checkend 0 >/dev/null; then
+        if ! echo "${1}" | ${OPENSSL} x509 -in /dev/stdin -noout -checkend 0 >/dev/null; then
             if compare "${ELEM_DAYS_VALID}" ">=" 0 && compare "${ELEM_DAYS_VALID}" "<" 1; then
                 DAYS_AGO='less than a day ago'
             else
@@ -2347,9 +2361,9 @@ ${CN_EXPIRED_TMP}"
 
         if [ -n "${CRITICAL_DAYS}" ] && [ -n "${CRITICAL_SECONDS}" ]; then
 
-            debuglog "executing: ${OPENSSL} x509 -noout -checkend ${CRITICAL_SECONDS} on cert element ${el_number} (${element_cn})"
+            debuglog "executing: ${OPENSSL} x509 -in /dev/stdin -noout -checkend ${CRITICAL_SECONDS} on cert element ${el_number} (${element_cn})"
 
-            if ! echo "${1}" | ${OPENSSL} x509 -noout -checkend "${CRITICAL_SECONDS}" >/dev/null; then
+            if ! echo "${1}" | ${OPENSSL} x509 -in /dev/stdin -noout -checkend "${CRITICAL_SECONDS}" >/dev/null; then
                 debuglog "CRITICAL: certificate element ${el_number} (${element_cn}) will expire in ${ELEM_DAYS_VALID} day(s) on ${ELEM_END_DATE}"
                 CN_EXPIRED_TMP="${element_cn}:${replace_current_message}:${OPENSSL_COMMAND} certificate element ${el_number} (${element_cn}) will expire in ${ELEM_DAYS_VALID} day(s) on ${ELEM_END_DATE}"
                 if [ -z "${CN_EXPIRED_CRITICAL}" ]; then
@@ -2369,9 +2383,9 @@ ${CN_EXPIRED_TMP}"
 
         if [ -n "${WARNING_DAYS}" ] && [ -n "${WARNING_SECONDS}" ]; then
 
-            debuglog "executing: ${OPENSSL} x509 -noout -checkend ${WARNING_SECONDS} on cert element ${el_number}"
+            debuglog "executing: ${OPENSSL} x509 -in /dev/stdin -noout -checkend ${WARNING_SECONDS} on cert element ${el_number}"
 
-            if ! echo "${1}" | ${OPENSSL} x509 -noout -checkend "${WARNING_SECONDS}" >/dev/null; then
+            if ! echo "${1}" | ${OPENSSL} x509 -in /dev/stdin -noout -checkend "${WARNING_SECONDS}" >/dev/null; then
                 debuglog "WARNING: certificate element ${el_number} (${element_cn}) will expire in ${ELEM_DAYS_VALID} day(s) on ${ELEM_END_DATE}"
                 CN_EXPIRED_TMP="${element_cn}:${replace_current_message}:${OPENSSL_COMMAND} certificate element ${el_number} (${element_cn}) will expire in ${ELEM_DAYS_VALID} day(s) on ${ELEM_END_DATE}"
                 if [ -z "${CN_EXPIRED_WARNING}" ]; then
@@ -2578,55 +2592,69 @@ fetch_certificate() {
     fi
 
     # Check if a protocol was specified (if not HTTP switch to TLS)
-    if [ -n "${PROTOCOL}" ] && [ "${PROTOCOL}" != 'http' ] && [ "${PROTOCOL}" != 'https' ] && [ "${PROTOCOL}" != 'h2' ]; then
+    if [ -n "${PROTOCOL}" ] &&
+           [ "${PROTOCOL}" != 'http' ] &&
+           [ "${PROTOCOL}" != 'https' ] &&
+           [ "${PROTOCOL}" != 'h2' ] &&
+           [ "${PROTOCOL}" != 'h3' ]; then
 
         case "${PROTOCOL}" in
         pop3 | ftp)
-            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         pop3s | ftps)
-            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         smtp)
-            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} ${S_CLIENT_NAME} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} ${S_CLIENT_NAME} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         smtps)
-            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION}  ${S_CLIENT_NAME} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'QUIT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION}  ${S_CLIENT_NAME} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         irc | ldap)
-            exec_with_timeout "echo | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "echo | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
-        ircs | ldaps | dns)
-            exec_with_timeout "echo | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+        ircs | ldaps | dns | sips)
+            exec_with_timeout "echo | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         imap)
-            exec_with_timeout "printf 'A01 LOGOUT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'A01 LOGOUT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         imaps)
-            exec_with_timeout "printf 'A01 LOGOUT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'A01 LOGOUT\\n' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            RET=$?
+            ;;
+        mqtts)
+
+            # we create a temporary file with the message content (because of quoting and special characters
+            create_temporary_file
+            MQTT_MESSAGE=${TEMPFILE}
+            printf "\\x10\\x0d\\x00\\x04MQTT\\x04\\x00\\x00\\x00\\x00\\x01a" > "${MQTT_MESSAGE}"
+
+            exec_with_timeout "cat ${MQTT_MESSAGE} | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         postgres | postgresql)
-            exec_with_timeout "printf 'X\\0\\0\\0\\4' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "printf 'X\\0\\0\\0\\4' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         sieve)
-            exec_with_timeout "echo 'LOGOUT' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "echo 'LOGOUT' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         xmpp | xmpp-server)
-            exec_with_timeout "echo 'Q' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${XMPPHOST} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "echo 'Q' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${XMPPHOST} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         mysql)
-            exec_with_timeout "echo | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+            exec_with_timeout "echo | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -starttls ${PROTOCOL} -showcerts -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
             RET=$?
             ;;
         *)
@@ -2765,9 +2793,11 @@ fetch_certificate() {
 
         if [ "${PROTOCOL}" = 'h2' ]; then
             ALPN="-alpn h2"
+        elif [ "${PROTOCOL}" = 'h3' ]; then
+            ALPN="-alpn h3"
         fi
 
-        exec_with_timeout "printf '${HTTP_REQUEST}' | ${OPENSSL} s_client ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf ${ALPN} -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -showcerts -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
+        exec_with_timeout "printf '${HTTP_REQUEST}' | ${OPENSSL} s_client ${QUIC} ${SECURITY_LEVEL} ${INETPROTO} ${CLIENT} ${CLIENTPASS} -crlf ${ALPN} -connect ${HOST_ADDR}:${PORT} ${SERVERNAME} ${SCLIENT_PROXY} ${SCLIENT_PROXY_ARGUMENT} -showcerts -verify 6 ${ROOT_CA} ${SSL_VERSION} ${SSL_VERSION_DISABLED} ${SSL_AU} ${STATUS} ${DANE} ${IGNOREEOF} ${RENEGOTIATION} 2> ${ERROR} 1> ${CERT}"
         RET=$?
 
     fi
@@ -2854,6 +2884,10 @@ fetch_certificate() {
             if [ -z "${SELFSIGNED}" ]; then
                 prepend_critical_message 'Self signed certificate'
             fi
+
+        elif ascii_grep 'quic_do_handshake' "${ERROR}"; then
+
+            prepend_critical_message 'QUIC not supported'
 
         elif ascii_grep 'dh[ ]key[ ]too[ ]small' "${ERROR}"; then
 
@@ -2985,6 +3019,10 @@ fetch_certificate() {
         if [ "${PROTOCOL}" = 'h2' ]; then
             if ! "${GREP_BIN}" -q -F 'ALPN protocol: h2' "${CERT}"; then
                 prepend_critical_message 'The server does not support HTTP/2'
+            fi
+        elif [ "${PROTOCOL}" = 'h3' ]; then
+            if ! "${GREP_BIN}" -q -F 'ALPN protocol: h3' "${CERT}"; then
+                prepend_critical_message 'The server does not support HTTP/3'
             fi
         fi
 
@@ -3214,6 +3252,10 @@ parse_command_line_options() {
             IGNORE_TLS_RENEGOTIATION='1'
             shift
             ;;
+        --ignore-unexpected-eof)
+            IGNORE_UNEXPECTED_EOF='1'
+            shift
+            ;;
         --info)
             INFO='1'
             shift
@@ -3301,6 +3343,10 @@ parse_command_line_options() {
             ;;
         --prometheus)
             PROMETHEUS=1
+            shift
+            ;;
+        --quic)
+            QUIC='-quic'
             shift
             ;;
         -q | --quiet)
@@ -3753,6 +3799,10 @@ $2"
         -P | --protocol)
             check_option_argument '-P|--protocol' "$2"
             PROTOCOL="$2"
+
+            # set the protocol to lowercase
+            PROTOCOL=$( echo "${PROTOCOL}" | tr '[:upper:]' '[:lower:]' )
+
             shift 2
             ;;
         --proxy)
@@ -4195,11 +4245,17 @@ main() {
             http)
                 PORT=80
                 ;;
-            https | h2)
+            https | h2 | h3)
                 PORT=443
+                ;;
+            mqtts)
+                PORT=8883
                 ;;
             mysql)
                 PORT=3306
+                ;;
+            sips)
+                PORT=5061
                 ;;
             xmpp)
                 PORT=5222
@@ -4348,6 +4404,26 @@ main() {
     fi
     check_required_prog "${OPENSSL}"
     OPENSSL=${PROG}
+
+    if [ -n "${QUIC}" ] ; then
+
+        require_s_client_option '-quic'
+
+        # QUIC requires HTTP/2
+        if [ -n "${PROTOCOL}" ] && [ "${PROTOCOL}" != 'h3' ]; then
+            critical 'QUIC only works with HTTP/2'
+        else
+            verboselog '--quic specified enabling HTTP/3'
+            PROTOCOL='h3'
+        fi
+
+        # check if curl supports HTTP/3
+        if curl --help all | grep -q -- --http3 ; then
+            debuglog 'curl supports HTTP/3'
+            CURL_QUIC='--http3'
+        fi
+
+    fi
 
     ##############################################################################
     # custom grep
@@ -4589,7 +4665,7 @@ main() {
             DNS_OVER_HTTP=${TEMPFILE}
 
             TIMEOUT_REASON="Resolving over HTTP with ${RESOLVE_OVER_HTTP}"
-            exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' -H 'Content-Type: application/dns-json' https://${RESOLVE_OVER_HTTP}/resolve?name=${HOST}\\&type=A" "${DNS_OVER_HTTP}"
+            exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' -H 'Content-Type: application/dns-json' https://${RESOLVE_OVER_HTTP}/resolve?name=${HOST}\\&type=A" "${DNS_OVER_HTTP}"
 
             if [ "${DEBUG}" -ge 1 ]; then
                 jq < "${DNS_OVER_HTTP}" | sed 's/^/[DBG]   /' 1>&2
@@ -4859,9 +4935,9 @@ main() {
 
             TIMEOUT_REASON="fetching certificate file"
             if [ -n "${HTTP_USER_AGENT}" ]; then
-                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${FILE_URI}\\\" > ${FILE}"
+                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${FILE_URI}\\\" > ${FILE}"
             else
-                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent --location \\\"${FILE_URI}\\\" > ${FILE}"
+                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --location \\\"${FILE_URI}\\\" > ${FILE}"
             fi
             unset TIMEOUT_REASON
 
@@ -4871,6 +4947,10 @@ main() {
 
         elif [ ! -r "${FILE}" ]; then
             critical "Cannot read file ${FILE}"
+        elif [ -d "${FILE}" ]; then
+            critical "${FILE} is a directory"
+        elif ! [ -f "${FILE}" ]; then
+            critical "${FILE} is not a regular file"
         fi
 
     fi
@@ -4909,7 +4989,7 @@ main() {
         SCALE=0
     fi
 
-    # reuired utilitied
+    # required utilities
 
     check_required_prog 'bc'
     BCBIN=${PROG}
@@ -5058,6 +5138,11 @@ main() {
             verboselog "cannot find nmap: disabling connection checks and ciphers checks"
             debuglog "cannot find nmap: disabling connection checks and ciphers checks"
             DISABLE_NMAP=1
+
+            if [ -n "${IGNORE_CONNECTION_STATE}" ] ; then
+                unknown "--ignore-connection-state requires nmap"
+            fi
+
         else
             if [ ! -x "${NMAP_BIN}" ]; then
                 unknown "${NMAP_BIN} is not executable"
@@ -5210,22 +5295,38 @@ main() {
     #   => We supply an invalid command line option to get the help
     #      on standard error for these intermediate versions.
     #
+
     SERVERNAME=
-    if ${OPENSSL} s_client -help 2>&1 | "${GREP_BIN}" -F -q -- -servername || ${OPENSSL} s_client not_a_real_option 2>&1 | "${GREP_BIN}" -F -q -- -servername; then
 
-        if [ -n "${SNI}" ]; then
-            SERVERNAME="-servername ${SNI}"
-        else
-            SERVERNAME="-servername ${HOST_NAME}"
-        fi
+    if ${OPENSSL} version | grep -q -F 'LibreSSL' && [ "${HOST_IS_IP}" -eq 1 ] ; then
 
-        debuglog "'${OPENSSL} s_client' supports '-servername': using ${SERVERNAME}"
+        verboselog 'LibreSSL does not support IP addresses as "servername": disabling virtual server support'
+
+    elif ${OPENSSL} version | grep -q -F 'LibreSSL' && echo "${HOST_NAME}" | grep -q '^_' ; then
+
+        verboselog 'LibreSSL does not support a "servername" value beginning with an underscore: disabling virtual server support'
 
     else
 
-        verboselog "'${OPENSSL} s_client' does not support '-servername': disabling virtual server support"
+        if ${OPENSSL} s_client -help 2>&1 | "${GREP_BIN}" -F -q -- -servername || ${OPENSSL} s_client not_a_real_option 2>&1 | "${GREP_BIN}" -F -q -- -servername; then
+
+            if [ -n "${SNI}" ]; then
+                SERVERNAME="-servername ${SNI}"
+            else
+                SERVERNAME="-servername ${HOST_NAME}"
+            fi
+
+            debuglog "'${OPENSSL} s_client' supports '-servername': using ${SERVERNAME}"
+
+        else
+
+            verboselog "'${OPENSSL} s_client' does not support '-servername': disabling virtual server support"
+
+        fi
 
     fi
+
+    debuglog "SERVERNAME=${SERVERNAME}"
 
     ################################################################################
     # Check if openssl s_client supports the specified protocol
@@ -5312,7 +5413,7 @@ main() {
         # Check if curl is needed and if it supports the -4 and -6 options
         if [ -z "${CURL_BIN}" ]; then
             if [ -n "${SSL_LAB_CRIT_ASSESSMENT}" ] || [ -n "${OCSP}" ]; then
-                if ! "${CURL_BIN}" --manual | "${GREP_BIN}" -F -q -- -6 && [ -n "${INETPROTO}" ]; then
+                if ! "${CURL_BIN}" --help all | "${GREP_BIN}" -F -q -- -6 && [ -n "${INETPROTO}" ]; then
                     unknown "curl does not support the ${INETPROTO} option"
                 fi
             fi
@@ -5443,8 +5544,10 @@ main() {
 
         if [ -n "${DISABLE_NMAP}" ]; then
 
-            verboselog "Using a proxy: cannot check for disable protocols"
-            debuglog "Using a proxy: cannot check for disable protocols"
+            if [ -n "${USING_A_PROXY}" ] ; then
+                verboselog "Using a proxy: cannot check for disable protocols"
+                debuglog "Using a proxy: cannot check for disable protocols"
+            fi
 
         else
 
@@ -5541,6 +5644,13 @@ main() {
             RENEGOTIATION="-legacy_renegotiation"
         fi
     fi
+    if [ -n "${IGNORE_UNEXPECTED_EOF}" ]; then
+        debuglog "--ignore-unexpected-eof specified: checking OpenSSL version and -ignore_unexpected_eof support"
+        if "${OPENSSL}" s_client -help 2>&1 | "${GREP_BIN}" -q -F -- "-ignore_unexpected_eof"; then
+            debuglog "OpenSSL s_client supports the -ignore_unexpected_eof option"
+            IGNOREEOF="-ignore_unexpected_eof"
+        fi
+    fi
 
     ################################################################################
     # Connection check
@@ -5548,8 +5658,10 @@ main() {
 
         if [ -n "${DISABLE_NMAP}" ]; then
 
-            verboselog "Using a proxy: cannot test connection"
-            debuglog "Using a proxy: cannot test connection"
+            if [ -n "${USING_A_PROXY}" ] ; then
+                verboselog "Using a proxy: cannot test connection"
+                debuglog "Using a proxy: cannot test connection"
+            fi
 
         else
 
@@ -6582,13 +6694,13 @@ ${WARNING}"
 
             debuglog "http_proxy  = ${http_proxy}"
             debuglog "HTTPS_PROXY = ${HTTPS_PROXY}"
-            debuglog "executing ${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent \"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\""
+            debuglog "executing ${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent \"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\""
 
             if [ -n "${SNI}" ]; then
-                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent \\\"https://api.ssllabs.com/api/v2/analyze?host=${SNI}${IGNORE_SSL_LABS_CACHE}\\\" > ${JSON}"
+                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent \\\"https://api.ssllabs.com/api/v2/analyze?host=${SNI}${IGNORE_SSL_LABS_CACHE}\\\" > ${JSON}"
                 CURL_RETURN_CODE=$?
             else
-                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent \\\"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\\\" > ${JSON}"
+                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent \\\"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\\\" > ${JSON}"
                 CURL_RETURN_CODE=$?
             fi
 
@@ -6600,9 +6712,20 @@ ${WARNING}"
                     break
                 fi
 
-                debuglog "curl returned ${CURL_RETURN_CODE}: ${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent \"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\""
+                if [ "${CURL_RETURN_CODE}" -eq 35 ]; then
 
-                critical "Error checking SSL Labs: curl returned ${CURL_RETURN_CODE}, see 'man curl' for details"
+
+                    debuglog "curl returned ${CURL_RETURN_CODE}: ${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent \"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\""
+
+                    critical "Error checking SSL Labs: TLS handshake error"
+
+                else
+
+                    debuglog "curl returned ${CURL_RETURN_CODE}: ${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${INETPROTO} --silent \"https://api.ssllabs.com/api/v2/analyze?host=${HOST_NAME}${IGNORE_SSL_LABS_CACHE}\""
+
+                    critical "Error checking SSL Labs: curl returned ${CURL_RETURN_CODE}, see 'man curl' for details"
+
+                fi
 
             fi
 
@@ -6983,6 +7106,10 @@ ${WARNING}"
             add_prometheus_status_output_line "cert_valid{cn=\"${CN}\"} 0"
             prometheus_output
 
+        fi
+
+        if [ -n "${INFO_OUTPUT}" ] ; then
+            echo "${INFO_OUTPUT}"
         fi
 
     fi

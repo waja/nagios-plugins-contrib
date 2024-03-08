@@ -1,5 +1,17 @@
 # News
 
+* 2024-02-28 Version 2.80.0
+ * Add support to ignore unclean TLS shutdowns
+* 2024-01-14 Version 2.79.0
+ * SIPS support
+* 2023-11-30 Version 2.78.0
+ * QUIC support
+ * OpenSSL 3.2.0 Support
+* 2023-11-23 Version 2.77.0
+ * Added support for MQTTS
+* 2023-10-30 Version 2.76.0
+ * ```--info``` output at the end
+ * Added a check if ```--file``` is a directory
 * 2023-09-27 Version 2.75.0
   * Fixed an issue with the timeout
 * 2023-09-13 Version 2.74.0

@@ -1,7 +1,7 @@
 # check\_ssl\_cert
 
  &copy; Matteo Corti, ETH Zurich, 2007-2012.
- &copy; Matteo Corti, 2007-2023.
+ &copy; Matteo Corti, 2007-2024.
 
  see [AUTHORS.md](AUTHORS.md) for the complete list of contributors
 
@@ -144,6 +144,7 @@ Options:
       --ignore-ssl-labs-errors     Ignore errors if SSL Labs is not
                                    accessible or times out
       --ignore-tls-renegotiation   Ignore the TLS renegotiation check
+      --ignore-unexpected-eof      Ignore unclean TLS shutdowns
       --inetproto protocol         Force IP version 4 or 6
       --info                       Print certificate information
       --init-host-cache            Initialize the host cache
@@ -200,10 +201,10 @@ Options:
                                    integers, 2 otherwise
    -P,--protocol protocol          Use the specific protocol:
                                    dns, ftp, ftps, http, https (default),
-                                   h2 (HTTP/2), imap, imaps, irc, ircs, ldap,
-                                   ldaps, mysql, pop3, pop3s, postgres,
-                                   sieve, smtp, smtps, tds, xmpp,
-                                   xmpp-server.
+                                   h2 (HTTP/2), h3 (HTTP/3), imap, imaps,
+                                   irc, ircs, ldap, ldaps, mqtts, mysql,
+                                   pop3, pop3s, postgres, sieve, sips, smtp,
+                                   smtps, tds, xmpp, xmpp-server.
                                    ftp, imap, irc, ldap, pop3, postgres,
                                    sieve, smtp: switch to TLS using StartTLS
       --password source            Password source for a local certificate,
@@ -213,6 +214,7 @@ Options:
       --proxy proxy                Set http_proxy and the s_client -proxy
                                    option
       --python-bin path            Path of the python binary to be used
+      --quic                       Use QUIC
    -q,--quiet                      Do not produce any output
    -r,--rootcert path              Root certificate or directory to be used
                                    for certificate validation
@@ -437,6 +439,17 @@ To run a single test:
 ## Documentation
 
 The majority of the documentation files are written using the [GitHub Flavored Markdown](https://github.github.com/gfm/) language.
+
+## Supporters
+
+We are very grateful to our amazing supporters and sponsors!
+
+* [Łukasz Wąsikowski](https://github.com/IdahoPL)
+* [Claus-Theodor Riegg](https://github.com/crigertg)
+* [wols](https://github.com/wols)
+* [Netzkommune](https://github.com/netzkommune)
+
+If you'd like to support this script, please visit [our sponsorship page](https://github.com/sponsors/matteocorti) on GitHub.
 
 ## Bugs
 
