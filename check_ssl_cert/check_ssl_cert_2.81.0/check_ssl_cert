@@ -26,7 +26,7 @@
 ################################################################################
 # Constants
 
-VERSION=2.80.0
+VERSION=2.81.0
 SHORTNAME="SSL_CERT"
 
 VALID_ATTRIBUTES=",startdate,enddate,subject,issuer,modulus,serial,hash,email,ocsp_uri,fingerprint,"
@@ -56,6 +56,7 @@ STATUS_UNKNOWN=3
 STATUS_WARNING=1
 TEMPFILE=""
 WARNING_MSG=""
+FINGERPRINT_ALG=sha1
 
 DEFAULT_FORMAT="%SHORTNAME% %STATUS% - %HOST%:%PORT%, %PROTOCOL%, %OPENSSL_COMMAND% %SELFSIGNEDCERT%certificate %DISPLAY_CN%%CHECKEDNAMES%from '%CA_ISSUER_MATCHED%' valid until %DATE%%DAYS_VALID%%OCSP_EXPIRES_IN_HOURS%%SSL_LABS_HOST_GRADE%"
 
@@ -340,7 +341,8 @@ usage() {
     echo "                                   beginning of the chain"
     # Delimiter at 78 chars ############################################################
     echo "      --file-bin path              Path of the file binary to be used"
-    echo "      --fingerprint SHA1           Pattern to match the SHA1-Fingerprint"
+    echo "      --fingerprint hash           Pattern to match the fingerprint"
+    echo "      --fingerprint-alg algorithm  Algorithm for fingerprint. Default sha1"
     echo "      --first-element-only         Verify just the first cert element, not"
     echo "                                   the whole chain"
     echo "      --force-dconv-date           Force the usage of dconv for date"
@@ -431,6 +433,7 @@ usage() {
     echo "                                   This check is automatic for HTTPS"
     # Delimiter at 78 chars ############################################################
     echo "      --nmap-bin path              Path of the nmap binary to be used"
+    echo "      --nmap-with-proxy            Allow nmap to be used with a proxy"
     echo "      --no-perf                    Do not show performance data"
     echo "      --no-proxy                   Ignore the http_proxy and https_proxy"
     echo "                                   environment variables"
@@ -1587,7 +1590,7 @@ extract_cert_attribute() {
         echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -serial | sed -e "s/^serial=//"
         ;;
     fingerprint)
-        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -fingerprint -sha1 | sed -e "s/^SHA1 Fingerprint=//"
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -fingerprint -${FINGERPRINT_ALG} | sed -e "s/^${FINGERPRINT_ALG} Fingerprint=//"
         ;;
     oscp_uri)
         echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -ocsp_uri
@@ -3270,6 +3273,10 @@ parse_command_line_options() {
             fi
             shift
             ;;
+        --nmap-with-proxy)
+            NMAP_WITH_PROXY=1
+            shift
+            ;;
         --no-perf)
             NO_PERF=1
             shift
@@ -3727,6 +3734,11 @@ $2"
         --fingerprint)
             check_option_argument '--fingerprint' "$2"
             FINGERPRINT_LOCK="$2"
+            shift 2
+            ;;
+        --fingerprint-alg)
+            check_option_argument '--fingerprint-alg' "$2"
+            FINGERPRINT_ALG="$2"
             shift 2
             ;;
         --long-output)
@@ -4515,10 +4527,15 @@ main() {
         [ -n "${HTTPS_PROXY}" ] ||
         [ -n "${SCLIENT_PROXY}" ] ||
         [ -n "${CURL_PROXY}" ]; then
-        DISABLE_NMAP=1
-        USING_A_PROXY=1
-        debuglog "A proxy is specified: nmap disabled"
-        verboselog "A proxy is specified: nmap checks disabled"
+        if [ -z "${NMAP_WITH_PROXY}" ] ; then
+            DISABLE_NMAP=1
+            USING_A_PROXY=1
+            debuglog "A proxy is specified: nmap disabled"
+            verboselog "A proxy is specified: nmap checks disabled"
+        else
+            debuglog "A proxy is specified: nmap enabled because of --nmap-with-proxy"
+            verboselog "A proxy is specified: nmap enabled because of --nmap-with-proxy"
+        fi
     fi
 
 
@@ -5553,9 +5570,13 @@ main() {
 
             # see https://github.com/matteocorti/check_ssl_cert/issues/378
 
-            debuglog "Executing ${NMAP_BIN} --unprivileged -Pn -p \"${PORT}\" \"${NMAP_INETPROTO}\" --script +ssl-enum-ciphers \"${NMAP_HOST_ADDR}\" 2>&1 | \"${GREP_BIN}\" '^|'"
-
-            OFFERED_PROTOCOLS=$(${NMAP_BIN} --unprivileged -Pn -p "${PORT}" "${NMAP_INETPROTO}" --script +ssl-enum-ciphers "${NMAP_HOST_ADDR}" 2>&1 | "${GREP_BIN}" '^|')
+            if [ -n "${SNI}" ]; then  # https://github.com/matteocorti/check_ssl_cert/issues/505
+                debuglog "Executing ${NMAP_BIN} -Pn -p \"${PORT}\" \"${NMAP_INETPROTO}\" --script +ssl-enum-ciphers --script-args=tls.servername=\"${SNI}\" \"${HOST_ADDR}\" 2>&1 | grep '^|'"
+                OFFERED_PROTOCOLS=$(${NMAP_BIN} -Pn -p "${PORT}" "${NMAP_INETPROTO}" --script +ssl-enum-ciphers --script-args=tls.servername="${SNI}" "${HOST_ADDR}" 2>&1 | grep '^|')
+            else
+                debuglog "Executing ${NMAP_BIN} -Pn -p \"${PORT}\" \"${NMAP_INETPROTO}\" --script +ssl-enum-ciphers  \"${HOST_ADDR}\" 2>&1 | grep '^|'"
+                OFFERED_PROTOCOLS=$(${NMAP_BIN} -Pn -p "${PORT}" "${NMAP_INETPROTO}" --script +ssl-enum-ciphers "${HOST_ADDR}" 2>&1 | grep '^|')
+            fi
 
             debuglog "offered ciphers and protocols:"
             debuglog "${OFFERED_PROTOCOLS}" | sed 's/^|/[DBG] /'
@@ -6445,9 +6466,9 @@ EOF
 
         if [ -z "${ok}" ]; then
             FINGERPRINT_LOCK_TMP="$(echo "${FINGERPRINT_LOCK}" | sed "s/|/ PIPE /g")"
-            prepend_critical_message "invalid SHA1 Fingerprint ('${FINGERPRINT_LOCK_TMP}' does not match '${FINGERPRINT}')"
+            prepend_critical_message "invalid ${FINGERPRINT_ALG} Fingerprint ('${FINGERPRINT_LOCK_TMP}' does not match '${FINGERPRINT}')"
         else
-            verboselog "Valid SHA1 fingerprint (${FINGERPRINT})"
+            verboselog "Valid ${FINGERPRINT_ALG} fingerprint (${FINGERPRINT})"
         fi
 
     fi
@@ -6590,7 +6611,12 @@ INPUT
 
             # -Pn is needed even if we specify a port
             TIMEOUT_REASON="checking ciphers"
-            exec_with_timeout "${NMAP_BIN} --unprivileged -Pn --script +ssl-enum-ciphers ${NMAP_INETPROTO} ${HOST_ADDR} -p ${PORT}" "${NMAP_OUT}" "${NMAP_ERR}"
+            if [ -n "${SNI}" ]; then
+                exec_with_timeout "${NMAP_BIN} -Pn --script +ssl-enum-ciphers ${NMAP_INETPROTO} --script-args=tls.servername=${SNI} ${HOST_ADDR} -p ${PORT}" "${NMAP_OUT}" "${NMAP_ERR}"
+            else
+                exec_with_timeout "${NMAP_BIN} -Pn --script +ssl-enum-ciphers ${NMAP_INETPROTO} ${HOST_ADDR} -p ${PORT}" "${NMAP_OUT}" "${NMAP_ERR}"
+            fi
+
             unset TIMEOUT_REASON
 
             if [ "${DEBUG}" -ge 1 ]; then
@@ -6933,7 +6959,10 @@ ${WARNING}"
         elif ascii_grep '^verify[ ]error:num=[0-9][0-9]*:certificate[ ]has[ ]expired' "${ERROR}"; then
 
             debuglog 'Cannot verify since the certificate has expired.'
-
+        elif ascii_grep '^verify[ ]error:num=[0-9][0-9]*:unable to get local issuer certificate' "${ERROR}"; then
+            if [ -z "${IGNORE_INCOMPLETE_CHAIN}" ]; then
+                prepend_critical_message "Cannot verify certificate, cannot verify certificate chain (local issuer certificate)"
+            fi
         else
 
             DEBUG_MESSAGE="$(sed 's/^/Error: /' "${ERROR}")"
