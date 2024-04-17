@@ -1,0 +1,88 @@
+From 155e35ace12f41bbaa42e4ea19bfea6de416bd95 Mon Sep 17 00:00:00 2001
+From: Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
+Date: Fri, 22 Mar 2024 19:48:09 +0100
+Subject: [PATCH] Compile warnings.
+
+Address various compile warnings in check_memcached.
+
+Signed-off-by: Sebastian Andrzej Siewior <sebastian@breakpoint.cc>
+---
+ check_memcached/check_memcached.l |   14 +++++++-------
+ common.mk                         |    2 +-
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+--- a/check_memcached/check_memcached.l
++++ b/check_memcached/check_memcached.l
+@@ -152,7 +152,7 @@ cmd_set=		{ save_to = &obj_cmd_set; }
+ %%
+ /* ==================================================================================================== */
+ 
+-yywrap() {
++int yywrap(void) {
+ 	return 1;
+ }
+ 
+@@ -343,7 +343,7 @@ int check_memcached() {
+ 	}
+ 
+ 	if ( nagios_service_output == NULL ) {
+-		str_bytes = asprintf(&nagios_service_output,"");
++		str_bytes = asprintf(&nagios_service_output," ");
+ 	}
+ 	/* ----------------------------------------------------------------------------------------- */
+ 	/* ---- Analyze the stats, return 0,1,2 as required ---------------------------------------- */
+@@ -351,7 +351,7 @@ int check_memcached() {
+ 	if ( obj_time == 0 ) {
+ 		nagios_service_tmp = nagios_service_output;
+ 		str_bytes = asprintf(&nagios_service_output,
+-				"%sno stats available yet. Come back in %d minutes; ",
++				"%sno stats available yet. Come back in %" PRIu64 " minutes; ",
+ 				nagios_service_tmp,
+ 				min_stats_interval - (stats.time - obj_time_oldest ) / 60
+ 				);
+@@ -362,7 +362,7 @@ int check_memcached() {
+ 			nagios_result|=1;
+ 			nagios_service_tmp = nagios_service_output;
+ 			str_bytes = asprintf(&nagios_service_output,
+-					"%sToo many evictions: %d; ",
++					"%sToo many evictions: %llu; ",
+ 					nagios_service_tmp,
+ 					stats.evictions - obj_evictions
+ 					);
+@@ -399,7 +399,7 @@ int check_memcached() {
+ 
+ 		nagios_service_tmp = nagios_service_output;
+ 		str_bytes = asprintf(&nagios_service_output, 
+-			"%shits=%llu misses=%llu evictions=%llu interval=%lu mins",
++			"%shits=%llu misses=%llu evictions=%llu interval=%u mins",
+ 			nagios_service_tmp,
+ 			stats.get_hits - obj_get_hits,
+ 			stats.get_misses - obj_get_misses,
+@@ -453,7 +453,7 @@ int check_memcached() {
+ 		nagios_perfdata = "";
+ 	} else {
+ 		str_bytes = asprintf(&nagios_perfdata, 
+-			"%s delta_time=%lu delta_cmd_get=%llu delta_cmd_set=%llu delta_get_hits=%llu delta_get_misses=%llu delta_evictions=%llu",
++			"%s delta_time=%u delta_cmd_get=%llu delta_cmd_set=%llu delta_get_hits=%llu delta_get_misses=%llu delta_evictions=%llu",
+ 			current_stats_str,
+ 			(uint32_t) ( stats.time - obj_time ),
+ 			stats.cmd_get - obj_cmd_get,
+@@ -600,7 +600,7 @@ void usage() {
+ 	printf("\t-n  ... Keep up to this many items in the history object in memcached (default: %u)\n",max_n_stats);
+ 	printf("\t-T  ... Minimum time interval (in minutes) to use to analyse stats. (default: %u)\n",min_stats_interval);
+ 	printf("\t-w  ... Generate warning if quotient of hits/misses falls below this value (default: %1.1f)\n",min_hit_miss);
+-	printf("\t-E  ... Generate warning if number of evictions exceeds this threshold. 0=disable. (default: %llu)\n",max_evictions);
++	printf("\t-E  ... Generate warning if number of evictions exceeds this threshold. 0=disable. (default: %" PRIu64 ")\n",max_evictions);
+ 	printf("\t-t  ... timeout in seconds (default: %1.1f)\n",timeout);
+ 	printf("\t-k  ... key name for history object (default: %s)\n",memcached_key);
+ 	printf("\t-K  ... expiry time in seconds for history object (default: %u)\n",memcache_stats_object_expiry_time);
+--- a/common.mk
++++ b/common.mk
+@@ -1,6 +1,6 @@
+ 
+ # import buildflags
+-CFLAGS += $(shell dpkg-buildflags --get CFLAGS)
++CFLAGS += $(shell dpkg-buildflags --get CFLAGS) -D_GNU_SOURCE
+ CPPFLAGS += $(shell dpkg-buildflags --get CPPFLAGS)
+ CXXFLAGS += $(shell dpkg-buildflags --get CXXFLAGS)
+ LDFLAGS += $(shell dpkg-buildflags --get LDFLAGS)
