@@ -1,3 +1,22 @@
+nagios-plugins-contrib (46.20240417) unstable; urgency=medium
+
+  [ Bas Couwenberg ]
+  * [13d5bbd] Replace pkg-config build dependency with pkgconf.
+
+  [ Jan Wagner ]
+  * [2141896] check_hpasm: Update to 4.9
+  * [85805f4] check_ssl_cert: Update to 2.80.0 (Closes: #1067532)
+  * [50bbecf] Drop nagios-plugins-contrib binary transitional package
+    (Closes: #1038281)
+  * [d7c7c50] check_haproxy: Update Upstream and to Revision 1.1
+  * [fd82fc4] Drop obsolete d/patches/check_haproxy/monitoring-plugin
+  * [093ad47] Adding d/p/check_memcached/fix_compile_warnings
+    (Closes: #1066576), thanks Sebastian Andrzej Siewior
+  * [079ab68] check_ssl_cert: Update to 2.81.0
+  * [9be161f] check_rbl: Update to 1.7.3
+
+ -- Jan Wagner <waja@cyconet.org>  Wed, 17 Apr 2024 11:50:13 +0000
+
 nagios-plugins-contrib (45.20231212) unstable; urgency=medium
 
   [ Bernd Zeimetz ]
