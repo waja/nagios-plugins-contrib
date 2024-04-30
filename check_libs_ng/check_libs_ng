@@ -26,7 +26,7 @@ from __future__ import print_function
 
 import os
 import sys
-from glob import glob
+from glob import iglob
 import argparse
 import logging
 
@@ -53,7 +53,7 @@ def main():
         logging.basicConfig(level=logging.WARNING)
 
     needs_reload = dict()
-    for proc in glob('/proc/[0-9]*'):  # numbers to avoid e.g. /proc/self
+    for proc in iglob('/proc/[0-9]*'):  # numbers to avoid e.g. /proc/self
         exe = os.path.join(proc, 'exe')
         if os.path.exists(exe):
             try:
