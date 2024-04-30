@@ -56,20 +56,23 @@ def main():
     for proc in glob('/proc/[0-9]*'):  # numbers to avoid e.g. /proc/self
         exe = os.path.join(proc, 'exe')
         if os.path.exists(exe):
-            proc_pid = os.path.basename(proc)
-            proc_name = os.path.basename(os.path.realpath(exe))
-            logger.debug('checking process %s', proc_name)
-            os.chdir(os.path.join(proc, 'map_files'))
-            for map_file in os.listdir('.'):
-                # all files in /map_files/ are absolute symlinks, so we don't need abspath()
-                real_map_file_path = os.path.realpath(map_file)
-                if not '/lib/' in real_map_file_path:
-                    logger.debug('skipping non-lib path %s', real_map_file_path)
-                    continue
-                else:
-                    logger.debug('checking lib %s', real_map_file_path)
-                if os.stat(map_file).st_nlink == 0:
-                    needs_reload.setdefault(proc_name, set()).add(proc_pid)
+            try:
+                proc_pid = os.path.basename(proc)
+                proc_name = os.path.basename(os.path.realpath(exe))
+                logger.debug('checking process %s', proc_name)
+                os.chdir(os.path.join(proc, 'map_files'))
+                for map_file in os.listdir('.'):
+                    # all files in /map_files/ are absolute symlinks, so we don't need abspath()
+                    real_map_file_path = os.path.realpath(map_file)
+                    if not '/lib/' in real_map_file_path:
+                        logger.debug('skipping non-lib path %s', real_map_file_path)
+                        continue
+                    else:
+                        logger.debug('checking lib %s', real_map_file_path)
+                    if os.stat(map_file).st_nlink == 0:
+                        needs_reload.setdefault(proc_name, set()).add(proc_pid)
+            except FileNotFoundError:
+                pass
         else:
             logger.debug('skipping kernel process %s', os.path.basename(proc))
 
