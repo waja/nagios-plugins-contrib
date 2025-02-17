@@ -296,9 +296,10 @@ https://github.com/disqus/nagios-plugins
 check_haproxy:
 
 The plugin was downloaded from: 
-https://github.com/polymorf/check_haproxy/blob/master/check_haproxy.pl
+https://raw.githubusercontent.com/men-crt-sup/nagios-plugins/master/check_haproxy.pl
 
   2010 Stéphane Urbanovski <stephane.urbanovski@ac-nancy-metz.fr>
+  2019 Claudio Kuenzler <ck@claudiokuenzler.com>
   
   License: GPL v2
   
