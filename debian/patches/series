@@ -64,3 +64,4 @@ check_raid/hpacucli_cache_fail
 check_raid/fix_unparsed_error_cciss
 check_redis/acl_support
 check_v6/remove_spaces_from_perf_data
+dsa/check_running_kernel_vmlinux
