@@ -1,9 +1,9 @@
 --- a/check_rbl/src/check_rbl.ini
 +++ b/check_rbl/src/check_rbl.ini
-@@ -182,3 +182,28 @@
+@@ -126,3 +126,28 @@
+ server=xbl.spamhaus.org
  server=z.mailspike.net
  server=zen.spamhaus.org
- server=zombie.dnsbl.sorbs.net
 +; added by debian in random order
 +server=dul.dnsbl.borderware.com
 +server=uribl.swinog.ch
