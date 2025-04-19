@@ -8,7 +8,7 @@
 # See the INSTALL.md file for installation instructions
 #
 # Copyright (c) 2007-2012 ETH Zurich <matteo.corti@ethz.ch>
-# Copyright (c) 2007-2024 Matteo Corti <matteo@corti.li>
+# Copyright (c) 2007-2025 Matteo Corti <matteo@corti.li>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -26,8 +26,11 @@
 ################################################################################
 # Constants
 
-VERSION=2.82.0
+VERSION=2.92.0
 SHORTNAME="SSL_CERT"
+
+# reset possibly set variables
+unset HOST
 
 VALID_ATTRIBUTES=",startdate,enddate,subject,issuer,modulus,serial,hash,email,ocsp_uri,fingerprint,"
 
@@ -43,7 +46,7 @@ CONFIGURATION_FILE="${HOME}/.check_ssl_certrc"
 CRITICAL_MSG=""
 DEBUG=0
 DEBUG_FILE=""
-DEFAULT_REQUIRED_HTTP_HEADERS="strict-transport-security,X-Frame-Options,Content-Security-Policy,X-Content-Type-Options,Referrer-Policy,Permissions-Policy"
+DEFAULT_REQUIRED_HTTP_HEADERS="strict-transport-security,Content-Security-Policy,X-Content-Type-Options,Referrer-Policy,Permissions-Policy"
 DEFAULT_UNREQUIRED_HTTP_HEADERS="X-Powered-By,X-Aspnet-Version,X-XSS-Protection,X-AspNetMvc-Version"
 EARLIEST_VALIDITY_HOURS=""
 HOST_CACHE="${HOME}/.check_ssl_cert-cache"
@@ -126,10 +129,24 @@ format_template() {
 
 }
 
+check_option() {
+
+    variable=$1
+    text=$2
+
+    debuglog "Checking if ${text} was already specified (${variable}) (override: ${OVERRIDE})"
+
+    if [ -n "${variable}" ] &&
+           [ -z "${OVERRIDE}" ] ; then
+        unknown "${text} can be specified only once"
+    fi
+
+}
+
 ################################################################################
 # Add the specified header to the list of required HTTP headers
 # Usage:
-#   add_required_header X-Frame-Options
+#   add_required_header strict-transport-security
 add_required_header() {
     header=$1
     debuglog "Adding ${header} to the list of required HTTP headers: ${REQUIRED_HTTP_HEADERS}"
@@ -140,7 +157,7 @@ add_required_header() {
     fi
 }
 
-################################################################################
+################################################################################551
 # Add the specified header to the list of unrequired HTTP headers
 # Usage:
 #   add_unrequired_header X-Powered-By
@@ -298,8 +315,7 @@ usage() {
     echo "      --check-ssl-labs-warn grade  SSL Labs grade on which to warn"
     echo "      --clientpass phrase          Set passphrase for client certificate."
     echo "      --configuration file         Read options from the specified file"
-    echo "      --crl                        Check revocation via CRL (requires"
-    echo "                                   --rootcert-file)"
+    echo "                                   Can be specified more than once"
     echo "      --curl-bin path              Path of the curl binary to be used"
     echo "      --custom-http-header string  Custom HTTP header sent when getting the"
     echo "                                   cert example: 'X-Check-Ssl-Cert: Foobar=1'"
@@ -333,8 +349,11 @@ usage() {
     echo "      --dtls1                      Use the DTLS protocol 1.0"
     echo "      --dtls1_2                    Use the DTLS protocol 1.2"
     # Delimiter at 78 chars ############################################################
-    echo "   -e,--email address              Pattern to match the email address"
-    echo "                                   contained in the certificate"
+    echo "   -e,--email address              Pattern (extended regular expression) to"
+    echo "                                   match the email address contained in the"
+    echo "                                   certificate. You can specify different"
+    echo "                                   addresses separated by a pipe"
+    echo "                                   (e.g., 'addr1|addr2')"
     echo "      --ecdsa                      Signature algorithm selection: force ECDSA"
     echo "                                   certificate"
     echo "      --element number             Check up to the N cert element from the"
@@ -376,12 +395,17 @@ usage() {
     echo "      --http-use-get               Use GET instead of HEAD (default) for the"
     echo "                                   HTTP related checks"
     # Delimiter at 78 chars ############################################################
-    echo "   -i,--issuer issuer              Pattern to match the issuer of the"
-    echo "                                   certificate"
+    echo "   -i,--issuer issuer              Pattern (extended regular expression) to"
+    echo "                                   match the issuer of the certificate"
+    echo "                                   You can specify different issuers"
+    echo "                                   separated by a pipe"
+    echo "                                   (e.g., 'issuer1|issuer2')"
     echo "      --ignore-altnames            Ignore alternative names when matching"
     echo "                                   pattern specified in -n (or the host name)"
     echo "      --ignore-connection-problems [state] In case of connection problems"
     echo "                                   returns OK or the optional state"
+    echo "      --ignore-crl                 Ignore CRLs"
+    echo "      --ignore-dh                  Ignore too small DH keys"
     echo "      --ignore-exp                 Ignore expiration date"
     echo "      --ignore-http-headers        Ignore checks on HTTP headers with --all"
     echo "                                   and --all-local"
@@ -492,13 +516,16 @@ usage() {
     echo "                                   certificate CAs"
     echo "      --require-dnssec             Require DNSSEC"
     echo "      --require-http-header header Require the specified HTTP header"
-    echo "                                    (e.g., X-Frame-Options)"
+    echo "                                   (e.g., strict-transport-security)."
+    echo "                                   Can be specified more than once"
     echo "      --require-no-http-header header Require the absence of the specified"
     echo "                                   HTTP header (e.g., X-Powered-By)"
+    echo "                                   Can be specified more than once"
     echo "      --require-no-ssl2            Critical if SSL version 2 is offered"
     echo "      --require-no-ssl3            Critical if SSL version 3 is offered"
     echo "      --require-no-tls1            Critical if TLS 1 is offered"
     echo "      --require-no-tls1_1          Critical if TLS 1.1 is offered"
+    echo "      --require-no-tls1_2          Critical if TLS 1.2 is offered"
     echo "      --require-ocsp-stapling      Require OCSP stapling"
     echo "      --require-purpose usage      Require the specified key usage (can be"
     echo "                                   specified more then once)"
@@ -561,6 +588,8 @@ usage() {
     echo "                                   alternate names too (enabled by default)"
     echo "   -n,--cn name                    Pattern to match the CN or AltName"
     echo "                                   (can be specified multiple times)"
+    echo "      --crl                        Check revocation via CRL (enabled by"
+    echo "                                   default)"
     echo "      --curl-user-agent string     User agent that curl shall use to obtain"
     echo "                                   the issuer cert"
     echo "      --days days                  Minimum number of days a certificate has"
@@ -586,15 +615,16 @@ usage() {
     echo "                                   Alternative Name"
     echo "                                   extension"
     echo "      --require-security-header header require the specified HTTP"
-    echo "                                   security header (e.g., X-Frame-Options)"
+    echo "                                   security header"
+    echo "                                   (e.g., strict-transport-security)"
     echo "                                   (deprecated use --require-http-header)"
+    echo "                                   Can be specified more than once"
     echo "      --require-security-headers   Require all the HTTP security headers:"
     echo "                                     Content-Security-Policy"
     echo "                                     Permissions-Policy"
     echo "                                     Referrer-Policy"
     echo "                                     strict-transport-security"
     echo "                                     X-Content-Type-Options"
-    echo "                                     X-Frame-Options"
     echo "      --require-security-headers-path path the path to be used to fetch HTTP"
     echo "                                   security headers"
     echo "      --require-x-frame-options [path] Require the presence of the"
@@ -1485,6 +1515,18 @@ require_s_client_option() {
 }
 
 ################################################################################
+# Checks if s_client does not support the given option
+#
+# Usage:
+#   check_s_client_option '-no_ssl2'
+#
+check_s_client_option() {
+    debuglog "Checking if s_client supports the $1 option"
+    "${OPENSSL}" s_client -help 2>&1 | "${GREP_BIN}" -q -- "$1"
+    return $?
+}
+
+################################################################################
 # Exits with unknown if x509 does not support the given option
 #
 # Usage:
@@ -1594,7 +1636,7 @@ extract_cert_attribute() {
         echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -serial | sed -e "s/^serial=//"
         ;;
     fingerprint)
-        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -fingerprint -${FINGERPRINT_ALG} | sed -e "s/^${FINGERPRINT_ALG} Fingerprint=//"
+        echo "${cert_content}" | "${OPENSSL}" x509 -in /dev/stdin -noout -fingerprint -"${FINGERPRINT_ALG}" | sed -e "s/^${FINGERPRINT_ALG} Fingerprint=//"
         ;;
     oscp_uri)
         echo "${cert_content}" | "${OPENSSL}" "${OPENSSL_COMMAND}" -in /dev/stdin -noout ${OPENSSL_PARAMS} -ocsp_uri
@@ -1881,15 +1923,169 @@ check_required_prog() {
 }
 
 ################################################################################
+# Fetches the issuer cert for a given certificate element
+# Params
+#   $1 certificate element
+# Stores the fetched  certificate in ISSUER_CERT
+fetch_issuer_cert() {
+
+    ISSUER_CERT=
+    if [ -n "${ISSUER_CERT_CACHE}" ]; then
+
+        if [ -r "${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt" ]; then
+
+            debuglog "Found cached Issuer Certificate: ${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
+
+            ISSUER_CERT="${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
+
+        else
+
+            debuglog "Not found cached Issuer Certificate: ${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
+
+        fi
+
+    fi
+
+    ELEMENT_ISSUER_URIS="$(extract_cert_attribute 'issuer_uri' "${CERT_ELEMENT}")"
+
+    if [ -z "${ELEMENT_ISSUER_URIS}" ]; then
+        verboselog "Warning cannot find the CA Issuers in the certificate chain element ${el_number}: disabling revokation checks on chain element ${el_number}"
+        return
+    fi
+
+    debuglog "Chain element issuer URIs: ${ELEMENT_ISSUER_URIS}"
+
+    for ELEMENT_ISSUER_URI in ${ELEMENT_ISSUER_URIS}; do
+
+        debuglog "checking issuer URIs: ${ELEMENT_ISSUER_URI}"
+
+        # shellcheck disable=SC2021
+        ELEMENT_ISSUER_URI_WO_SPACES_TMP="$(echo "${ELEMENT_ISSUER_URI}" | tr -d '[[:space:]]')"
+        if [ "${ELEMENT_ISSUER_URI}" != "${ELEMENT_ISSUER_URI_WO_SPACES_TMP}" ]; then
+            verboselog "Warning: unable to fetch the CA issuer certificate (spaces in URI): skipping"
+            continue
+        elif ! echo "${ELEMENT_ISSUER_URI}" | "${GREP_BIN}" -q -i '^http'; then
+            verboselog "Warning: unable to fetch the CA issuer certificate (unsupported protocol): skipping"
+            continue
+        fi
+
+        if [ -z "${ISSUER_CERT}" ]; then
+
+            debuglog "Fetching issuer certificate ${ELEMENT_ISSUER_URI} to ${ISSUER_CERT_TMP}"
+
+            TIMEOUT_REASON="Fetching issuer ${ELEMENT_ISSUER_URI}"
+            if [ -n "${HTTP_USER_AGENT}" ]; then
+                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
+            else
+                exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
+            fi
+            unset TIMEOUT_REASON
+
+            TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}" | sed 's/.*://')"
+            debuglog "Issuer certificate type (1): ${TYPE_TMP}"
+
+            if echo "${ELEMENT_ISSUER_URI}" | "${GREP_BIN}" -F -q 'p7c'; then
+                debuglog "Converting issuer certificate from PKCS #7 to PEM"
+
+                open_for_writing "${ISSUER_CERT_TMP2}"
+                cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_TMP2}"
+
+                ${OPENSSL} pkcs7 -print_certs -inform DER -outform PEM -in "${ISSUER_CERT_TMP2}" -out "${ISSUER_CERT_TMP}"
+
+            fi
+
+            TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}" | sed 's/.*://')"
+            debuglog "Issuer certificate type (2): ${TYPE_TMP}"
+
+            # check for errors
+            if "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q HTML; then
+                debuglog "HTML page returned instead of a certificate"
+                critical "Unable to fetch a valid certificate issuer certificate (HTML page returned)."
+            fi
+
+            # check the result
+            if ! "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q '(ASCII|PEM)'; then
+
+                if "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q '(data|Certificate)'; then
+
+                    debuglog "Converting issuer certificate from DER to PEM"
+
+                    open_for_writing "${ISSUER_CERT_TMP2}"
+                    cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_TMP2}"
+
+                    ${OPENSSL} x509 -in /dev/stdin -inform DER -outform PEM -in "${ISSUER_CERT_TMP2}" -out "${ISSUER_CERT_TMP}"
+
+                elif "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q 'empty'; then
+
+                        # empty certs are allowed
+                    debuglog "Empty issuer certificate detected: skipping"
+                    return
+
+                else
+
+                    TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}")"
+                    debuglog "Complete issuer certificate type ${TYPE_TMP}"
+
+                    critical "Unable to fetch a valid certificate issuer certificate."
+
+                fi
+
+            fi
+
+            TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}" | sed 's/.*://')"
+            debuglog "Issuer certificate type (3): ${TYPE_TMP}"
+
+            if [ -n "${DEBUG_CERT}" ]; then
+
+                # remove trailing /
+                FILE_NAME=${ELEMENT_ISSUER_URI%/}
+
+                # remove everything up to the last slash
+                FILE_NAME="${FILE_NAME##*/}"
+
+                debuglog "Storing a copy of the retrieved issuer certificate to ${FILE_NAME} for debugging purposes"
+
+                open_for_writing "${FILE_NAME}"
+                cp "${ISSUER_CERT_TMP}" "${FILE_NAME}"
+
+            fi
+
+            if [ -n "${ISSUER_CERT_CACHE}" ]; then
+
+                if [ ! -w "${ISSUER_CERT_CACHE}" ]; then
+                    unknown "Issuer certificates cache ${ISSUER_CERT_CACHE} is not writable!"
+                fi
+
+                debuglog "Storing Issuer Certificate to cache: ${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
+
+                open_for_writing "${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
+                cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
+
+            fi
+
+            ISSUER_CERT=${ISSUER_CERT_TMP}
+
+        fi
+
+    done
+
+}
+
+################################################################################
 # Checks cert revocation via CRL
 # Params
 #   $1 cert
 #   $2 element number
 check_crl() {
+
     el_number=1
     if [ -n "$2" ]; then
         el_number=$2
     fi
+
+    debuglog "Checking CRL for element ${el_number}"
+    subject=$( extract_cert_attribute 'subject' "${CERT_ELEMENT}")
+    debuglog "Checking CRL for element ${el_number} (${subject})"
 
     create_temporary_file
     CERT_ELEMENT=${TEMPFILE}
@@ -1933,23 +2129,15 @@ check_crl() {
 
         fi
 
-        # combine the certificate and the CRL
-        debuglog "Combining the certificate, the CRL and the root cert"
-        debuglog "cat ${CRL_TMP_PEM} ${CERT} ${ROOT_CA_FILE} > ${CRL_TMP_CHAIN}"
-        cat "${CRL_TMP_PEM}" "${CERT}" "${ROOT_CA_FILE}" >"${CRL_TMP_CHAIN}"
 
-        debuglog "${OPENSSL} verify -crl_check -CRLfile ${CRL_TMP_PEM} ${CERT_ELEMENT}"
-        CRL_RESULT=$(
-            "${OPENSSL}" verify -crl_check -CAfile "${CRL_TMP_CHAIN}" -CRLfile "${CRL_TMP_PEM}" "${CERT_ELEMENT}" 2>&1 |
-                "${GREP_BIN}" -F ':' |
-                head -n 1 |
-                sed 's/^.*: //'
-        )
+        SERIAL="$(extract_cert_attribute 'serial' "${CERT_ELEMENT}")"
+        debuglog "Checking if the element serial number (${SERIAL}) is contained in the CRL"
 
-        debuglog "  result: ${CRL_RESULT}"
 
-        if ! [ "${CRL_RESULT}" = 'OK' ]; then
+        if openssl crl -in "${CRL_TMP_PEM}" -text 2>/dev/null | grep -q "Serial Number: ${SERIAL}$" ; then
+
             prepend_critical_message "certificate element ${el_number} is revoked (CRL)"
+
         fi
 
     else
@@ -1996,145 +2184,12 @@ check_ocsp() {
             critical 'unable to find issuer certificate hash.'
         fi
 
-        ISSUER_CERT=
-        if [ -n "${ISSUER_CERT_CACHE}" ]; then
+        fetch_issuer_cert "${CERT_ELEMENT}"
 
-            if [ -r "${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt" ]; then
-
-                debuglog "Found cached Issuer Certificate: ${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
-
-                ISSUER_CERT="${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
-
-            else
-
-                debuglog "Not found cached Issuer Certificate: ${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
-
-            fi
-
-        fi
-
-        ELEMENT_ISSUER_URIS="$(extract_cert_attribute 'issuer_uri' "${CERT_ELEMENT}")"
-
-        if [ -z "${ELEMENT_ISSUER_URIS}" ]; then
-            verboselog "Warning cannot find the CA Issuers in the certificate chain element ${el_number}: disabling OCSP checks on chain element ${el_number}"
+        if ! [ -r "${ISSUER_CERT}" ] ; then
+            verboselog "Unable to fetch the issuer certificate: skipping OCSP check"
             return
         fi
-
-        debuglog "Chain element issuer URIs: ${ELEMENT_ISSUER_URIS}"
-
-        for ELEMENT_ISSUER_URI in ${ELEMENT_ISSUER_URIS}; do
-
-            debuglog "checking issuer URIs: ${ELEMENT_ISSUER_URI}"
-
-            # shellcheck disable=SC2021
-            ELEMENT_ISSUER_URI_WO_SPACES_TMP="$(echo "${ELEMENT_ISSUER_URI}" | tr -d '[[:space:]]')"
-            if [ "${ELEMENT_ISSUER_URI}" != "${ELEMENT_ISSUER_URI_WO_SPACES_TMP}" ]; then
-                verboselog "Warning: unable to fetch the CA issuer certificate (spaces in URI): skipping"
-                continue
-            elif ! echo "${ELEMENT_ISSUER_URI}" | "${GREP_BIN}" -q -i '^http'; then
-                verboselog "Warning: unable to fetch the CA issuer certificate (unsupported protocol): skipping"
-                continue
-            fi
-
-            if [ -z "${ISSUER_CERT}" ]; then
-
-                debuglog "OCSP: fetching issuer certificate ${ELEMENT_ISSUER_URI} to ${ISSUER_CERT_TMP}"
-
-                TIMEOUT_REASON="OCSP: fetching issuer ${ELEMENT_ISSUER_URI}"
-                if [ -n "${HTTP_USER_AGENT}" ]; then
-                    exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --user-agent '${HTTP_USER_AGENT}' --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
-                else
-                    exec_with_timeout "${CURL_BIN} ${CURL_PROXY} ${CURL_PROXY_ARGUMENT} ${CURL_QUIC} ${INETPROTO} --silent --location \\\"${ELEMENT_ISSUER_URI}\\\" > ${ISSUER_CERT_TMP}"
-                fi
-                unset TIMEOUT_REASON
-
-                TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}" | sed 's/.*://')"
-                debuglog "OCSP: issuer certificate type (1): ${TYPE_TMP}"
-
-                if echo "${ELEMENT_ISSUER_URI}" | "${GREP_BIN}" -F -q 'p7c'; then
-                    debuglog "OCSP: converting issuer certificate from PKCS #7 to PEM"
-
-                    open_for_writing "${ISSUER_CERT_TMP2}"
-                    cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_TMP2}"
-
-                    ${OPENSSL} pkcs7 -print_certs -inform DER -outform PEM -in "${ISSUER_CERT_TMP2}" -out "${ISSUER_CERT_TMP}"
-
-                fi
-
-                TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}" | sed 's/.*://')"
-                debuglog "OCSP: issuer certificate type (2): ${TYPE_TMP}"
-
-                # check for errors
-                if "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q HTML; then
-                    debuglog "OCSP: HTML page returned instead of a certificate"
-                    critical "Unable to fetch a valid certificate issuer certificate (HTML page returned)."
-                fi
-
-                # check the result
-                if ! "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q '(ASCII|PEM)'; then
-
-                    if "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q '(data|Certificate)'; then
-
-                        debuglog "OCSP: converting issuer certificate from DER to PEM"
-
-                        open_for_writing "${ISSUER_CERT_TMP2}"
-                        cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_TMP2}"
-
-                        ${OPENSSL} x509 -in /dev/stdin -inform DER -outform PEM -in "${ISSUER_CERT_TMP2}" -out "${ISSUER_CERT_TMP}"
-
-                    elif "${FILE_BIN}" -L -b "${ISSUER_CERT_TMP}" | "${GREP_BIN}" -E -q 'empty'; then
-
-                        # empty certs are allowed
-                        debuglog "OCSP empty certificate detected: skipping"
-                        return
-
-                    else
-
-                        TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}")"
-                        debuglog "OCSP: complete issuer certificate type ${TYPE_TMP}"
-
-                        critical "Unable to fetch a valid certificate issuer certificate."
-
-                    fi
-
-                fi
-
-                TYPE_TMP="$(${FILE_BIN} -L -b "${ISSUER_CERT_TMP}" | sed 's/.*://')"
-                debuglog "OCSP: issuer certificate type (3): ${TYPE_TMP}"
-
-                if [ -n "${DEBUG_CERT}" ]; then
-
-                    # remove trailing /
-                    FILE_NAME=${ELEMENT_ISSUER_URI%/}
-
-                    # remove everything up to the last slash
-                    FILE_NAME="${FILE_NAME##*/}"
-
-                    debuglog "OCSP: storing a copy of the retrieved issuer certificate to ${FILE_NAME} for debugging purposes"
-
-                    open_for_writing "${FILE_NAME}"
-                    cp "${ISSUER_CERT_TMP}" "${FILE_NAME}"
-
-                fi
-
-                if [ -n "${ISSUER_CERT_CACHE}" ]; then
-
-                    if [ ! -w "${ISSUER_CERT_CACHE}" ]; then
-                        unknown "Issuer certificates cache ${ISSUER_CERT_CACHE} is not writable!"
-                    fi
-
-                    debuglog "Storing Issuer Certificate to cache: ${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
-
-                    open_for_writing "${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
-                    cp "${ISSUER_CERT_TMP}" "${ISSUER_CERT_CACHE}/${ISSUER_HASH}.crt"
-
-                fi
-
-                ISSUER_CERT=${ISSUER_CERT_TMP}
-
-            fi
-
-        done
 
         OCSP_URIS="$(extract_cert_attribute 'oscp_uri' "${CERT_ELEMENT}")"
 
@@ -2901,8 +2956,9 @@ fetch_certificate() {
             prepend_critical_message 'QUIC not supported'
 
         elif ascii_grep 'dh[ ]key[ ]too[ ]small' "${ERROR}"; then
-
-            prepend_critical_message 'DH with a key too small'
+            if [ -z "${IGNORE_DH}" ]; then
+                prepend_critical_message 'DH with a key too small'
+            fi
 
         elif ascii_grep 'alert[ ]handshake[ ]failure' "${ERROR}"; then
 
@@ -3086,9 +3142,13 @@ ascii_grep() {
 #  $2 next command line parameter
 check_option_argument() {
 
+    # the majority of the options is specided as '-s|--long'
+    # but | is a problem for Nagios: we substitute it with ', '
+    option=$( echo "${1}" | sed 's/|/, /' )
+
     # shellcheck disable=SC2295
     if [ -z "$2" ] || [ "${2%${2#?}}"x = '-x' ]; then
-        unknown "'${1}' requires an argument"
+        unknown "'${option}' requires an argument"
     fi
 
 }
@@ -3233,6 +3293,14 @@ parse_command_line_options() {
             ;;
         --ignore-altnames)
             ALTNAMES=
+            shift
+            ;;
+        --ignore-crl)
+            CRL=""
+            shift
+            ;;
+        --ignore-dh)
+            IGNORE_DH=1
             shift
             ;;
         --ignore-http-headers)
@@ -3397,6 +3465,10 @@ parse_command_line_options() {
             DISALLOWED_PROTOCOLS="${DISALLOWED_PROTOCOLS} TLSv1.1"
             shift
             ;;
+        --require-no-tls1_2)
+            DISALLOWED_PROTOCOLS="${DISALLOWED_PROTOCOLS} TLSv1.2"
+            shift
+            ;;
         --require-ocsp-stapling)
             REQUIRE_OCSP_STAPLING=1
             shift
@@ -3517,6 +3589,9 @@ parse_command_line_options() {
         # Options with one argument
 
         -c | --critical)
+            # CRITICAL_DAYS has a default
+            check_option "${CRITICAL_SPECIFIED}" '-c,--critical'
+            CRITICAL_SPECIFIED=1
             check_option_argument '-c,--critical' "$2"
             check_float "$2" "--critical: the number of days should be an integer or a float"
             CRITICAL_DAYS="$2"
@@ -3524,6 +3599,7 @@ parse_command_line_options() {
             shift 2
             ;;
         --check-ciphers)
+            check_option "${CHECK_CIPHERS}" '--check-ciphers'
             check_option_argument '--check-ciphers' "$2"
             CHECK_CIPHERS="$2"
             shift 2
@@ -3540,32 +3616,40 @@ parse_command_line_options() {
             else
                 unknown "Cannot read $2"
             fi
+            OVERRIDE=ok
             shift 2
             ;;
 
         --curl-bin)
+            check_option "${CURL_BIN}" '--curl-bin'
             check_option_argument '--curl-bin' "$2"
             CURL_BIN="$2"
             shift 2
             ;;
         --curl-user-agent)
+            check_option "${HTTP_USER_AGENT_SPECIFIED}" '--curl-user-agent'
+            HTTP_USER_AGENT_SPECIFIED=1
             deprecated '--curl-user-agent' "Use '--user-agent'"
             check_option_argument '--curl-user-agent' "$2"
             HTTP_USER_AGENT="$2"
             shift 2
             ;;
         --custom-http-header)
+            check_option "${CUSTOM_HTTP_HEADER}" '--custom-http-header'
             check_option_argument '--custom-http-header' "$2"
             CUSTOM_HTTP_HEADER="$2"
             shift 2
             ;;
         --date)
+            check_option "${DATEBIN}" '--date'
             check_option_argument '--date' "$2"
             DATEBIN="$2"
             shift 2
             ;;
         # Deprecated option: used to be as --warning
         --days)
+            check_option "${WARNING_DAYS_SPECIFIED}" '--days'
+            WARNING_DAYS_SPECIFIED=1
             deprecated '--days' "Use the '--warning' option"
             check_option_argument '--days' "$2"
             check_integer "$2" "--days: the number of days should be an integer"
@@ -3574,42 +3658,51 @@ parse_command_line_options() {
             shift 2
             ;;
         --debug-file)
+            check_option "${DEBUG_FILE}" '--debug-file'
             check_option_argument '--debug-file' "$2"
             DEBUG_FILE="$2"
             shift 2
             ;;
         --dig-bin)
+            check_option "${DIG_BIN}" '--dig-bin'
             check_option_argument '--dig-bin' "$2"
             DIG_BIN="$2"
             shift 2
             ;;
         --path)
+            check_option "${PATH_SPECIFIED}" '--path'
+            PATH_SPECIFIED=1
             check_option_argument '--path' "$2"
             export PATH="$2"
             shift 2
             ;;
         --inetproto)
+            check_option "${INETPROTO}" '--inetproto'
             check_option_argument '--inetproto' "$2"
             INETPROTO="-$2"
             shift 2
             ;;
         --jks-alias)
+            check_option "${JKSALIAS}" '--jks-alias'
             check_option_argument '--jks-alias' "$2"
             JKSALIAS="$2"
             shift 2
             ;;
         --nmap-bin)
+            check_option "${NMAP_BIN}" '--nmap-bin'
             check_option_argument '--nmap-bin' "$2"
             NMAP_BIN="$2"
             shift 2
             ;;
         -e | --email)
             check_option_argument 'e|--email' "$2"
+            check_option "${ADDR}" '--email'
             ADDR="$2"
             shift 2
             ;;
         -f | --file)
             check_option_argument ' -f|--file' "$2"
+            check_option "${FILE}" '--file'
             FILE="$2"
             # remove _HOST_ from the names to be checked as no host was specified
             # we leave the remaining hosts specified with --cn
@@ -3619,21 +3712,27 @@ parse_command_line_options() {
             ;;
         --file-bin)
             check_option_argument '--file-bin' "$2"
+            check_option "${FILE_BIN}" '--file-bin'
             FILE_BIN="$2"
             shift 2
             ;;
         --format)
             check_option_argument '--format' "$2"
+            check_option "${FORMAT}" '--format'
             FORMAT="$2"
             shift 2
             ;;
         --grep-bin)
             check_option_argument '--grep-bin' "$2"
+            check_option "${GREP_BIN_SPECIFIED}" '--grep-bin'
+            GREP_BIN_SPECIFIED=1
             GREP_BIN="$2"
             shift 2
             ;;
         -H | --host)
             check_option_argument '-H|--host' "$2"
+            check_option "${HOST_DEFINED}" '--host'
+            HOST_DEFINED=1
             HOST="$2"
 
             # remove http[s] from the input
@@ -3651,31 +3750,37 @@ parse_command_line_options() {
             ;;
         -i | --issuer)
             check_option_argument '-i|--issuer' "$2"
+            check_option "${ISSUER}" '--issuer'
             ISSUER="$2"
             shift 2
             ;;
         --issuer-cert-cache)
             check_option_argument '--issuer-cert-cache' "$2"
+            check_option "${ISSUER_CERT_CACHE}" '--issuer-ceer'
             ISSUER_CERT_CACHE="$2"
             shift 2
             ;;
         -L | --check-ssl-labs)
             check_option_argument '-L|--check-ssl-labs' "$2"
+            check_option "${SSL_LAB_CRIT_ASSESSMENT}" '--check-ssl-labs'
             SSL_LAB_CRIT_ASSESSMENT="$2"
             shift 2
             ;;
         --check-ssl-labs-warn)
             check_option_argument '--check-ssl-labs-warn' "$2"
+            check_option "${SSL_LAB_WARN_ASSESTMENT}" '--check-ssl-labs-warn'
             SSL_LAB_WARN_ASSESTMENT="$2"
             shift 2
             ;;
         --python-bin)
             check_option_argument '--python-bin' "$2"
+            check_option "${PYTHON_BIN}" '--python-bin'
             PYTHON_BIN="$2"
             shift 2
             ;;
         --security-level)
             check_option_argument '--security-level' "$2"
+            check_option "${SECURITY_LEVEL}" '--security-level'
             if ! echo "$2" | "${GREP_BIN}" -q '^[0-5]$' ; then
                 unknown 'Invalid secuirity level'
             fi
@@ -3685,11 +3790,14 @@ parse_command_line_options() {
 
         --serial)
             check_option_argument '--serial' "$2"
+            check_option "${SERIAL_LOCK}" '--serial'
             SERIAL_LOCK="$2"
             shift 2
             ;;
         --element)
             check_option_argument '--element' "$2"
+            check_option "${ELEMENT_SPECIFIED}" '--element'
+            ELEMENT_SPECIFIED=1
             ELEMENT="$2"
             shift 2
             ;;
@@ -3734,6 +3842,7 @@ $2"
             ;;
 
         --require-security-headers-path)
+            check_option "${HTTP_HEADERS_PATH}" '--require-security-header-path'
             check_option_argument '--require-security-header-path path' "$2"
             HTTP_HEADERS_PATH=$2
             shift 2
@@ -3741,15 +3850,19 @@ $2"
 
         --fingerprint)
             check_option_argument '--fingerprint' "$2"
+            check_option "${FINGERPRINT_LOCK}" '--fingerprint'
             FINGERPRINT_LOCK="$2"
             shift 2
             ;;
         --fingerprint-alg)
             check_option_argument '--fingerprint-alg' "$2"
+            check_option "${FINGERPRINT_ALG_SPECIFIED}" '--fingerprint-alg'
+            FINGERPRINT_ALG_SPECIFIED=1
             FINGERPRINT_ALG="$2"
             shift 2
             ;;
         --long-output)
+            check_option "${LONG_OUTPUT_ATTR}" '--long-output'
             check_option_argument '--long-output' "$2"
             LONG_OUTPUT_ATTR="$2"
             shift 2
@@ -3767,56 +3880,70 @@ $2"
             else
                 NAMES_TO_BE_CHECKED="${NAMES_TO_BE_CHECKED} ${2}"
             fi
+
+            # as soon as -m is specified we check altnames too
+            ALTNAMES=1
+
             debuglog "--cn specified: NAMES_TO_BE_CHECKED = ${NAMES_TO_BE_CHECKED}"
             shift 2
             ;;
         --not-issued-by)
+            check_option "${NOT_ISSUED_BY}" '--not-issued-by'
             check_option_argument '--not-issued-by' "$2"
             NOT_ISSUED_BY="$2"
             shift 2
             ;;
         --not-valid-longer-than)
             check_option_argument '--not-valid-longer-than' "$2"
+            check_option "${NOT_VALID_LONGER_THAN}" '--not-valid-longer-than'
             NOT_VALID_LONGER_THAN=$2
             shift 2
             ;;
         --ocsp-critical)
             check_option_argument '--ocsp-critical' "$2"
+            check_option "${OCSP_CRITICAL}" '--ocsp-critical'
             OCSP_CRITICAL="$2"
             shift 2
             ;;
         --ocsp-warning)
             check_option_argument '--ocsp-warning' "$2"
+            check_option "${OCSP_WARNING}" '--ocsp-warning'
             OCSP_WARNING="$2"
             shift 2
             ;;
         -o | --org)
             check_option_argument '-o|--org' "$2"
+            check_option "${ORGANIZATION}" '--org'
             ORGANIZATION="$2"
             shift 2
             ;;
         --openssl)
             check_option_argument '--openssl' "$2"
+            check_option "${OPENSSL}" '--openssl'
             OPENSSL="$2"
             shift 2
             ;;
         --password)
+            check_option "${PASSWORD_SOURCE}" '--password'
             check_option_argument '--password' "$2"
             PASSWORD_SOURCE="$2"
             shift 2
             ;;
         -p | --port)
+            check_option "${PORT}" '--port'
             check_option_argument '-p|--port' "$2"
             PORT="$2"
             shift 2
             ;;
         --precision)
+            check_option "${SCALE}" '--precision'
             check_option_argument '--precision' "$2"
             check_integer "$2" "--precision: the precision should be an integer"
             SCALE="$2"
             shift 2
             ;;
         -P | --protocol)
+            check_option "${PROTOCOL}" '--protocol'
             check_option_argument '-P|--protocol' "$2"
             PROTOCOL="$2"
 
@@ -3826,42 +3953,50 @@ $2"
             shift 2
             ;;
         --proxy)
+            check_option "${PROXY}" '--proxy'
             check_option_argument '--proxy' "$2"
             PROXY="$2"
             export http_proxy="$2"
             shift 2
             ;;
         --resolve)
+            check_option "${RESOLVE}" '--resolve'
             check_option_argument '--resolve' "$2"
             RESOLVE="$2"
             shift 2
             ;;
         -r | --rootcert)
+            check_option "${ROOT_CA}" '--rootcert'
             check_option_argument '-r|--rootcert' "$2"
             ROOT_CA="$2"
             shift 2
             ;;
         --rootcert-dir)
+            check_option "${ROOT_CA_DIR}" '--rootcert-dir'
             check_option_argument '--rootcert-dir' "$2"
             ROOT_CA_DIR="$2"
             shift 2
             ;;
         --rootcert-file)
+            check_option "${ROOT_CA_FILE}" '--rootcert-file'
             check_option_argument '--rootcert-file' "$2"
             ROOT_CA_FILE="$2"
             shift 2
             ;;
         -C | --clientcert)
+            check_option "${CLIENT_CERT}" '--clientcert'
             check_option_argument '-C|--clientcert' "$2"
             CLIENT_CERT="$2"
             shift 2
             ;;
         -K | --clientkey)
+            check_option "${CLIENT_KEY}" '--clientkey'
             check_option_argument '-K|--clientkey' "$2"
             CLIENT_KEY="$2"
             shift 2
             ;;
         --clientpass)
+            check_option "${CLIENT_PASS}" '--clientpass'
             if [ $# -gt 1 ]; then
                 CLIENT_PASS="$2"
                 shift 2
@@ -3870,11 +4005,13 @@ $2"
             fi
             ;;
         --sni)
+            check_option "${SNI}" '--sni'
             check_option_argument '--sni' "$2"
             SNI="$2"
             shift 2
             ;;
         -S | --ssl)
+            check_option "${SSL_VERSION}" '--ssl'
             deprecated "$1" "Use '--ssl2' or '--ssl3' instead"
             check_option_argument '' "$2"
             if [ "$2" = "2" ] || [ "$2" = "3" ]; then
@@ -3885,27 +4022,39 @@ $2"
             fi
             ;;
         -t | --timeout)
+            # TIMEOUT has a default
+            check_option "${TIMEOUT_SPECIFIED}" '--timeout'
+            TIMEOUT_SPECIFIED=1
             check_option_argument '-t|--timeout' "$2"
             check_integer "$2" "--timeout: the timeout should be an integer"
             TIMEOUT="$2"
             shift 2
             ;;
         --temp)
+            check_option "${TMPDIR_SPECIFIED}" '--temp'
+            TMPDIR_SPECIFIED=1
             check_option_argument '--temp' "$2"
             TMPDIR="$2"
             shift 2
             ;;
         -u | --url)
+            check_option "${HTTP_REQUEST_URL_SPECIFIED}" '--url'
+            HTTP_REQUEST_URL_SPECIFIED=1
             check_option_argument '-u|--url' "$2"
             HTTP_REQUEST_URL="$2"
             shift 2
             ;;
         --user-agent)
+            check_option "${HTTP_USER_AGENT_SPECIFIED}" '--user-agent'
+            HTTP_USER_AGENT_SPECIFIED=1
             check_option_argument '--user-agent' "$2"
             HTTP_USER_AGENT="$2"
             shift 2
             ;;
         -w | --warning)
+            # WARNING_DAYS has a default
+            check_option "${WARNING_SPECIFIED}" '--warning'
+            WARNING_SPECIFIED=1
             check_option_argument '-w|--warning' "$2"
             check_float "$2" "--warning: the number of days should be an integer or a float"
             WARNING_DAYS="$2"
@@ -3914,6 +4063,7 @@ $2"
             ;;
         --xmpphost)
             check_option_argument '--xmpphost' "$2"
+            check_option "${XMPPHOST}" '--xmpphost'
             XMPPHOST="$2"
             shift 2
             ;;
@@ -3923,15 +4073,15 @@ $2"
 
         --dane)
 
-            if [ -n "${DANE}" ]; then
-                unknown "--dane can be specified only once"
-            fi
-
+            check_option "${DANE}" "--dane"
             # check the second parameter if it exist
             if [ $# -gt 1 ]; then
 
                 # shellcheck disable=SC2295
-                if [ "${2%${2#?}}"x = '-x' ]; then
+                if [ -z "$2" ]; then
+                    DANE=1
+                    shift 2
+                elif [ "${2%${2#?}}"x = '-x' ]; then
                     DANE=1
                     shift
                 else
@@ -3949,6 +4099,8 @@ $2"
             ;;
 
         --maximum-validity)
+
+            check_option "${MAXIMUM_VALIDITY}" '--maximum-validity'
 
             MAXIMUM_VALIDITY=397
 
@@ -3969,6 +4121,8 @@ $2"
 
         --resolve-over-http)
 
+            check_option "${RESOLVE_OVER_HTTP}" '--resolve-over-http'
+
             # dns.google.com: we use the IP in case DNS is not directly reachable
             RESOLVE_OVER_HTTP=8.8.8.8
 
@@ -3988,6 +4142,8 @@ $2"
             ;;
 
         --require-client-cert)
+
+            check_option "${REQUIRE_CLIENT_CERT}" '--require-client-cert'
 
             REQUIRE_CLIENT_CERT=1
 
@@ -4032,6 +4188,8 @@ $2"
             ;;
 
         --ignore-connection-problems)
+
+            check_option "${IGNORE_CONNECTION_STATE}" '--ignore-connection-problems'
 
             # default OK
             IGNORE_CONNECTION_STATE="${STATUS_OK}"
@@ -4107,7 +4265,7 @@ main() {
     NAMES_TO_BE_CHECKED="__HOST__" # enabled by default
     CRITICAL_DAYS=15
     CRITICAL_SECONDS=$(days_to_seconds "${CRITICAL_DAYS}")
-    CRL=""
+    CRL=1
     CURL_BIN=""
     CURL_PROXY=""
     HTTP_USER_AGENT="check_ssl_cert/${VERSION}"
@@ -4170,6 +4328,7 @@ main() {
 
     # read additional options from the configuration file
     if [ -r "${CONFIGURATION_FILE}" ]; then
+        OVERRIDE=1
         while IFS= read -r line; do
             # shellcheck disable=SC2086
             set -- "$@" ${line}
@@ -4393,9 +4552,10 @@ main() {
         if [ -n "${SSL_LAB_CRIT_ASSESSMENT}" ] ||
             [ -n "${OCSP}" ] ||
             [ -n "${CRL}" ] ||
+            [ -n  "${REQUIRED_HTTP_HEADERS}" ] ||
             [ -n "${IGNORE_CONNECTION_STATE}" ] ||
             [ -n "${FILE_URI}" ]; then
-            debuglog "curl binary needed. SSL Labs = ${SSL_LAB_CRIT_ASSESSMENT}, OCSP = ${OCSP}, CURL = ${CRL}, IGNORE_CONNECTION_STATE=${IGNORE_CONNECTION_STATE}, FILE_URI=${FILE_URI}"
+            debuglog "curl binary needed. SSL Labs = ${SSL_LAB_CRIT_ASSESSMENT}, OCSP = ${OCSP}, CURL = ${CRL}, IGNORE_CONNECTION_STATE=${IGNORE_CONNECTION_STATE}, FILE_URI=${FILE_URI}, REQUIRED_HTTP_HEADERS=${REQUIRED_HTTP_HEADERS}"
             debuglog "curl binary not specified"
 
             check_required_prog curl
@@ -4816,7 +4976,7 @@ main() {
     debuglog "NAMES_TO_BE_CHECKED = ${NAMES_TO_BE_CHECKED}"
 
     if [ -n "${ALTNAMES}" ] && [ -z "${IGNORE_HOST_CN}" ] && [ -z "${NAMES_TO_BE_CHECKED}" ] && [ "${HOST_IS_IP}" -eq 0 ]; then
-        unknown "--altnames requires a common name to match (--cn or --host-cn)"
+        unknown "--altnames requires a common name to match (--match)"
     fi
 
     ##############################################################################
@@ -4946,11 +5106,13 @@ main() {
         # see https://en.wikipedia.org/wiki/Uniform_Resource_Identifier for the syntax
         FILE_URI=$(echo "${FILE}" | "${GREP_BIN}" '^[a-z][a-z+.-]*://')
         debuglog "${FILE} is an URI with an authority"
+        debuglog "  URI: ${FILE_URI}"
     fi
-
     if [ -n "${FILE}" ]; then
 
         if [ -n "${FILE_URI}" ]; then
+
+            debuglog "trying to fetch ${FILE_URI}"
 
             # we try to fetch it with curl
             create_temporary_file
@@ -5038,12 +5200,6 @@ main() {
         if ! echo "${NOT_VALID_LONGER_THAN}" | "${GREP_BIN}" -q '^[0-9][0-9]*$'; then
             unknown "invalid number of days '${NOT_VALID_LONGER_THAN}'"
         fi
-
-    fi
-
-    if [ -n "${CRL}" ] && [ -z "${ROOT_CA_FILE}" ]; then
-
-        unknown "To be able to check CRL we need the Root Cert. Please specify it with the --rootcert-file option"
 
     fi
 
@@ -5445,11 +5601,11 @@ main() {
         fi
 
         # check if IPv6 is available locally
-        if command -v ifconfig >/dev/null; then
-            ifconfig -a | "${GREP_BIN}" -F -q inet6
-            IPV6_INTERFACE=$?
-        elif command -v ip >/dev/null; then
+        if command -v ip >/dev/null; then
             ip addr | "${GREP_BIN}" -F -q inet6
+            IPV6_INTERFACE=$?
+        elif command -v ifconfig >/dev/null; then
+            ifconfig -a | "${GREP_BIN}" -F -q inet6
             IPV6_INTERFACE=$?
         else
             unknown "cannot determine if a network interface has IPv6 configured"
@@ -5502,21 +5658,23 @@ main() {
             echo "${DIG_OUTPUT}" | sed 's/^/[DBG]     /' 1>&2
         fi
 
+        # The output of dig on Ubuntu is sometimes interpreted as binary: we are using grep -a
+
         DNSSEC_ERROR=
         # check for the presence of the Authenticated Data (ad) flag in the header
-        if ! echo "${DIG_OUTPUT}" | "${GREP_BIN}" ';; flags:' | "${GREP_BIN}" -q 'ad[; ]'; then
+        if ! echo "${DIG_OUTPUT}" | "${GREP_BIN}" -a ';; flags:' | "${GREP_BIN}" -a -q 'ad[; ]'; then
             prepend_critical_message "DNSSEC: the Authenticated Data (ad) flag is not present"
             DNSSEC_ERROR=1
         fi
 
         # check the DNSSEC OK (do) flag indicating the recursive server is DNSSEC-aware
-        if ! echo "${DIG_OUTPUT}" | "${GREP_BIN}" ', flags:' | "${GREP_BIN}" -q 'do[; ]'; then
+        if ! echo "${DIG_OUTPUT}" | "${GREP_BIN}" -a ', flags:' | "${GREP_BIN}" -a -q 'do[; ]'; then
             prepend_critical_message "DNSSEC: the DNSSEC OK (do) flag indicating the recursive server is DNSSEC-aware is not present"
             DNSSEC_ERROR=1
         fi
 
         # check for the presence of an additional resource record of type RRSIG, with the same name as the A record.
-        if ! echo "${DIG_OUTPUT}" | "${GREP_BIN}" -q 'RRSIG'; then
+        if ! echo "${DIG_OUTPUT}" | "${GREP_BIN}" -a -q 'RRSIG'; then
             prepend_critical_message "DNSSEC: the RRSIG resource record is not present"
             DNSSEC_ERROR=1
         fi
@@ -5760,17 +5918,11 @@ main() {
     CRL_TMP=${TEMPFILE}
     create_temporary_file
     CRL_TMP_PEM=${TEMPFILE}
+
     create_temporary_file
-    CRL_TMP_CHAIN=${TEMPFILE}
-
-    if [ -n "${OCSP}" ]; then
-
-        create_temporary_file
-        ISSUER_CERT_TMP=${TEMPFILE}
-        create_temporary_file
-        ISSUER_CERT_TMP2=${TEMPFILE}
-
-    fi
+    ISSUER_CERT_TMP=${TEMPFILE}
+    create_temporary_file
+    ISSUER_CERT_TMP2=${TEMPFILE}
 
     if [ -n "${REQUIRE_OCSP_STAPLING}" ]; then
         create_temporary_file
@@ -5785,7 +5937,11 @@ main() {
 
     CLIENT=""
     if [ -n "${CLIENT_CERT}" ]; then
-        CLIENT="-cert ${CLIENT_CERT}"
+        if check_s_client_option '-chainCAfile'; then
+            CLIENT="-cert ${CLIENT_CERT} -chainCAfile ${CLIENT_CERT}"
+        else
+            CLIENT="-cert ${CLIENT_CERT}"
+        fi
     fi
     if [ -n "${CLIENT_KEY}" ]; then
         CLIENT="${CLIENT} -key ${CLIENT_KEY}"
@@ -5924,14 +6080,14 @@ main() {
 
                 if [ -r "${FILE}" ]; then
 
-                    if "${OPENSSL}" crl -in "${CERT}" -inform DER | "${GREP_BIN}" -F -q "BEGIN X509 CRL"; then
+                    if "${OPENSSL}" crl -in "${CERT}" -inform DER 2>&1 | "${GREP_BIN}" -F -q "BEGIN X509 CRL"; then
                         debuglog "File is DER encoded CRL"
 
                         OPENSSL_COMMAND="crl"
                         OPENSSL_PARAMS="-inform DER -nameopt utf8,oneline,-esc_msb"
                         OPENSSL_ENDDATE_OPTION="-nextupdate"
                     else
-                        prepend_critical_message "'${FILE}' is not a valid certificate file"
+                        critical "'${FILE}' is not a valid certificate file"
                     fi
 
                 else
@@ -6530,13 +6686,13 @@ EOF
 
                 check_cert_end_date "${chain_element}" "${elem_number}"
 
-                debuglog '------------------------------------------------------------------------------'
-                check_ocsp "${chain_element}" "${elem_number}"
-
                 if [ -n "${CRL}" ]; then
                     debuglog '------------------------------------------------------------------------------'
                     check_crl "${chain_element}" "${elem_number}"
                 fi
+
+                debuglog '------------------------------------------------------------------------------'
+                check_ocsp "${chain_element}" "${elem_number}"
 
                 CERT_IN_CHAIN=$((CERT_IN_CHAIN + 1))
                 if ! [ "${ELEMENT}" -eq 0 ] && [ $((ELEMENT - CERT_IN_CHAIN)) -lt 0 ]; then
@@ -6562,7 +6718,7 @@ EOF
                 MESSAGE_TMP=$(echo "${critical}" | sed 's/^[^:]*:[^:]*://')
 
                 # check if the warning is overridden by another certificate for the same CN
-                if echo "${CN_OK}" | "${GREP_BIN}" -q "${CN_TMP}"; then
+                if echo "${CN_OK}" | "${GREP_BIN}" -q "^${CN_TMP}$"; then
                     verboselog "Both a valid and an expired certificate were found"
                     if [ -n "${CHECK_CHAIN}" ]; then
                         prepend_critical_message "Both a valid and an expired certificate were found"
@@ -6585,7 +6741,7 @@ INPUT
                 MESSAGE_TMP=$(echo "${warning}" | sed 's/^[^:]*:[^:]*://')
 
                 # check if the warning is overridden by another certificate for the same CN
-                if echo "${CN_OK}" | "${GREP_BIN}" -q "${CN_TMP}"; then
+                if echo "${CN_OK}" | "${GREP_BIN}" -q "^${CN_TMP}$"; then
                     verboselog "Both a valid and an expired certificate were found"
                     if [ -n "${CHECK_CHAIN}" ]; then
                         prepend_critical_message "Both a valid and an expired certificate were found"
@@ -7063,6 +7219,10 @@ ${WARNING}"
 
     fi
 
+    if [ -n "${INFO_OUTPUT}" ] ; then
+        echo "${INFO_OUTPUT}"
+    fi
+
     ##############################################################################
     # Criticals and warnings
 
@@ -7160,10 +7320,6 @@ ${WARNING}"
             add_prometheus_status_output_line "cert_valid{cn=\"${CN}\"} 0"
             prometheus_output
 
-        fi
-
-        if [ -n "${INFO_OUTPUT}" ] ; then
-            echo "${INFO_OUTPUT}"
         fi
 
     fi

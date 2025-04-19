@@ -1,7 +1,7 @@
 # check\_ssl\_cert
 
- &copy; Matteo Corti, ETH Zurich, 2007-2012.  
- &copy; Matteo Corti, 2007-2024.
+ &copy; Matteo Corti, ETH Zurich, 2007-2012.
+ &copy; Matteo Corti, 2007-2025.
 
  see [AUTHORS.md](AUTHORS.md) for the complete list of contributors
 
@@ -47,8 +47,6 @@ Options:
       --check-ssl-labs-warn grade  SSL Labs grade on which to warn
       --clientpass phrase          Set passphrase for client certificate.
       --configuration file         Read options from the specified file
-      --crl                        Check revocation via CRL (requires
-                                   --rootcert-file)
       --curl-bin path              Path of the curl binary to be used
       --custom-http-header string  Custom HTTP header sent when getting the
                                    cert example: 'X-Check-Ssl-Cert: Foobar=1'
@@ -80,8 +78,11 @@ Options:
       --dtls                       Use the DTLS protocol
       --dtls1                      Use the DTLS protocol 1.0
       --dtls1_2                    Use the DTLS protocol 1.2
-   -e,--email address              Pattern to match the email address
-                                   contained in the certificate
+   -e,--email address              Pattern (extended regular expression) to
+                                   match the email address contained in the
+                                   certificate. You can specify different
+                                   addresses separated by a pipe
+                                   (e.g., 'addr1|addr2')
       --ecdsa                      Signature algorithm selection: force ECDSA
                                    certificate
       --element number             Check up to the N cert element from the
@@ -119,12 +120,17 @@ Options:
       --http-headers-path path     The path to be used to fetch HTTP headers
       --http-use-get               Use GET instead of HEAD (default) for the
                                    HTTP related checks
-   -i,--issuer issuer              Pattern to match the issuer of the
-                                   certificate
+   -i,--issuer issuer              Pattern (extended regular expression) to
+                                   match the issuer of the certificate
+                                   You can specify different issuers
+                                   separated by a pipe
+                                   (e.g., 'issuer1|issuer2')
       --ignore-altnames            Ignore alternative names when matching
                                    pattern specified in -n (or the host name)
       --ignore-connection-problems [state] In case of connection problems
                                    returns OK or the optional state
+      --ignore-crl                 Ignore CRLs
+      --ignore-dh                  Ignore too small DH keys
       --ignore-exp                 Ignore expiration date
       --ignore-http-headers        Ignore checks on HTTP headers with --all
                                    and --all-local
@@ -226,13 +232,14 @@ Options:
                                    certificate CAs
       --require-dnssec             Require DNSSEC
       --require-http-header header Require the specified HTTP header
-                                    (e.g., X-Frame-Options)
+                                    (e.g., strict-transport-security)
       --require-no-http-header header Require the absence of the specified
                                    HTTP header (e.g., X-Powered-By)
       --require-no-ssl2            Critical if SSL version 2 is offered
       --require-no-ssl3            Critical if SSL version 3 is offered
       --require-no-tls1            Critical if TLS 1 is offered
       --require-no-tls1_1          Critical if TLS 1.1 is offered
+      --require-no-tls1_2          Critical if TLS 1.2 is offered
       --require-ocsp-stapling      Require OCSP stapling
       --require-purpose usage      Require the specified key usage (can be
                                    specified more then once)
@@ -288,6 +295,8 @@ Deprecated options:
                                    alternate names too (enabled by default)
    -n,--cn name                    Pattern to match the CN or AltName
                                    (can be specified multiple times)
+      --crl                        Check revocation via CRL (enabled by
+                                   default)
       --curl-user-agent string     User agent that curl shall use to obtain
                                    the issuer cert
       --days days                  Minimum number of days a certificate has
@@ -450,6 +459,7 @@ We are very grateful to our amazing supporters and sponsors!
 * [Claus-Theodor Riegg](https://github.com/crigertg)
 * [wols](https://github.com/wols)
 * [Netzkommune](https://github.com/netzkommune)
+* [Nicolas Wimmer](https://github.com/naiz0)
 
 If you'd like to support this script, please visit [our sponsorship page](https://github.com/sponsors/matteocorti) on GitHub.
 

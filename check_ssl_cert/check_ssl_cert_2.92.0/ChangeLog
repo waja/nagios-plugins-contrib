@@ -1,3 +1,45 @@
+2025-04-08  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (main): Tries with ip first and then ifconfig (obsolete)
+
+2025-04-04  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (check_crl): Fixes an issue with CRL checks
+        * check_ssl_cert (parse_command_line_options): Checks alternative names when checking a file
+        * check_ssl_cert (main): Checks for curl when checking for HTTP headers
+
+2025-04-01  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (check_attr): Fixes an issue with oVirt certificates CNames
+
+2025-03-13  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (check_attr): CRL before OCSP
+
+2025-02-24  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (main): Fixed a problem with the DNSSEC check with IPv6 on Ubuntu
+
+2025-02-03  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (parse_command_line_options): --require-no-tls1_2 command line option added
+
+2024-10-25  Matteo Corti  <matteo@corti.li>
+
+        * test/integration_tests.sh: Separated the badssl.com tests as they are often failing (no connection)
+
+2024-10-16  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (DEFAULT_REQUIRED_HTTP_HEADERS): removed X-Frame-Options from the list of required headers (is now deprecated)
+
+2024-10-13  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (parse_command_line_options): fix the validation of --url and --user-agent
+
+2024-09-10  Matteo Corti  <matteo@corti.li>
+
+        * check_ssl_cert (check_option_argument): fixed a problem with | in the output
+
 2024-07-11  Matteo Corti  <matteo@corti.li>
 
         * check_ssl_cert (main): fetch HTTP headers for --debug-headers even if no header check is enabled

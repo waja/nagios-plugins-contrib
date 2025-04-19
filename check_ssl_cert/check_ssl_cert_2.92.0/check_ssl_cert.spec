@@ -1,4 +1,4 @@
-%global version          2.82.0
+%global version          2.92.0
 %global release          0
 %global sourcename       check_ssl_cert
 %global packagename      nagios-plugins-check_ssl_cert
@@ -54,19 +54,79 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %changelog
+* Tue Apr  8 2025 Matteo Corti <matteo@corti.li> - 2.92.0-0
+- Updated to 2.92.0
+
+* Fri Apr  4 2025 Matteo Corti <matteo@corti.li> - 2.91.0-0
+- Updated to 2.91.0
+
+* Fri Apr  4 2025 Matteo Corti <matteo@corti.li> - 2.90.0-0
+- Updated to 2.90.0
+
+* Wed Apr  2 2025 Matteo Corti <matteo@corti.li> - 2.89.0-0
+- Updated to 2.89.0
+
+* Wed Mar 12 2025 Matteo Corti <matteo@corti.li> - 2.88.0-0
+- Updated to 2.88.0
+
+* Fri Mar  7 2025 Matteo Corti <matteo@corti.li> - 2.87.1-0
+- Updated to 2.87.1
+
+* Thu Mar  6 2025 Matteo Corti <matteo@corti.li> - 2.87.0-0
+- Updated to 2.87.0
+
+* Mon Feb 24 2025 Matteo Corti <matteo@corti.li> - 2.86.1-0
+- Updated to 2.86.1
+
+* Mon Feb  3 2025 Matteo Corti <matteo@corti.li> - 2.86.0-0
+- Updated to 2.86.0
+
+* Tue Jan  7 2025 Matteo Corti <matteo@corti.li> - 2.85.1-0
+- Updated to 2.85.1
+
+* Wed Oct 15 2024 Matteo Corti <matteo@corti.li> - 2.85.0-0
+- Updated to 2.85.0
+
+* Sun Oct 13 2024 Matteo Corti <matteo@corti.li> - 2.84.5-0
+- Updated to 2.84.5
+
+* Wed Oct  2 2024 Matteo Corti <matteo@corti.li> - 2.84.4-0
+- Updated to 2.84.4
+
+* Fri Sep 27 2024 Matteo Corti <matteo@corti.li> - 2.84.3-0
+- Updated to 2.84.3
+
+* Fri Sep 27 2024 Matteo Corti <matteo@corti.li> - 2.84.2-0
+- Updated to 2.84.2
+
+* Thu Sep 26 2024 Matteo Corti <matteo@corti.li> - 2.84.1-0
+- Updated to 2.84.1
+
+* Tue Sep 24 2024 Matteo Corti <matteo@corti.li> - 2.84.0-0
+- Updated to 2.84.0
+
+* Mon Sep 16 2024 Matteo Corti <matteo@corti.li> - 2.83.1-1
+- Corrected the dates im Changelog
+
+* Tue Sep 10 2024 Matteo Corti <matteo@corti.li> - 2.83.1-0
+- Updated to 2.83.1
+
+* Wed Aug 28 2024 Matteo Corti <matteo@corti.li> - 2.83.0-0
+- Updated to 2.83.0
+
 * Thu Jul  11 2024 Matteo Corti <matteo@corti.li> - 2.82.0-0
 - Updated to 2.82.0
 
 * Tue May  28 2024 Matteo Corti <matteo@corti.li> - 2.81.1-0
 - Updated to 2.81.1
 
-* Sun Mar  17 2024 Matteo Corti <matteo@corti.li> - 2.81.0-0
+* Sun Mar 17 2024 Matteo Corti <matteo@corti.li> - 2.81.0-0
 - Updated to 2.81.0
 
-* Wed Feb  28 2024 Matteo Corti <matteo@corti.li> - 2.80.0-0
+* Wed Feb 28 2024 Matteo Corti <matteo@corti.li> - 2.80.0-0
 - Updated to 2.80.0
 
-* Sun Jan  14 2024 Matteo Corti <matteo@corti.li> - 2.79.0-0
+* Sun Jan 14 2024 Matteo Corti <matteo@corti.li> - 2.79.0-0
 - Updated to 2.79.0
 
 * Thu Nov  30 2023 Matteo Corti <matteo@corti.li> - 2.78.0-0
