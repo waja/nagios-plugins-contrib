@@ -1,8 +1,10 @@
-nagios-plugins-contrib (47.20250421) UNRELEASED; urgency=medium
+nagios-plugins-contrib (48.20250420) unstable; urgency=medium
 
-  * 
+  * [fbd1c3e] Adding dsa-wrap-nagios-check (Closes: #1053155)
+  * [094a997] Auto-update debian/copyright
+  * [eb517b9] Auto-update debian/control
 
- -- Jan Wagner <waja@cyconet.org>  Sun, 20 Apr 2025 22:19:00 +0200
+ -- Jan Wagner <waja@cyconet.org>  Sun, 20 Apr 2025 21:08:25 +0000
 
 nagios-plugins-contrib (47.20250420) unstable; urgency=medium
 
