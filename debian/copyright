@@ -376,7 +376,8 @@ http://labs.consol.de/lang/en/nagios/check_hpasm/
   GNU General Public License for more details.
   
   You should have received a copy of the GNU General Public License along
-  with this program; if not, see <https://www.gnu.org/licenses/>.
+  with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
   
     On Debian systems, the complete text of the GNU General
     Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
@@ -623,7 +624,8 @@ http://labs.consol.de/lang/en/nagios/check_mysql_health/
   GNU General Public License for more details.
   
   You should have received a copy of the GNU General Public License along
-  with this program; if not, see <https://www.gnu.org/licenses/>.
+  with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
   
     On Debian systems, the complete text of the GNU General
     Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
@@ -757,7 +759,9 @@ https://github.com/matteocorti/check_rbl
   General Public License for more details.
   
   You should have received a copy of the GNU General Public License
-  along with this program; if not, see <https://www.gnu.org/licenses/>.
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+  MA 02110-1301 USA.
   
 
 ------------------------------------------------------------------------------
@@ -781,7 +785,9 @@ https://github.com/willixix/WL-NagiosPlugins
   GNU General Public License for more details.
   
   You should have received a copy of the GNU General Public License
-  along with this program; if not, see <https://www.gnu.org/licenses/>.
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+  MA 02110-1301 USA.
   
 
 ------------------------------------------------------------------------------
@@ -888,7 +894,8 @@ https://github.com/willixix/WL-NagiosPlugins
   GNU General Public License for more details.
   
   You should have received a copy of the GNU General Public License
-  along with this program; if not, see <https://www.gnu.org/licenses/>.
+  along with this program; if not, write to the Free Software Foundation,
+  Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
   
   
 
@@ -1069,6 +1076,7 @@ https://salsa.debian.org/dsa-team/mirror/dsa-nagios
   checks/dsa-check-running-kernel:# Copyright 2011 Alexander Reichle-Schmehl
   sbin/dsa-update-apt-status:# Copyright 2009 Peter Palfrader
   sbin/dsa-update-unowned-file-status:# Copyright 2012 Peter Palfrader
+  sbin/dsa-wrap-nagios-check:# Copyright 2017 Peter Palfrader
   
   Permission is hereby granted, free of charge, to any person obtaining
   a copy of this software and associated documentation files (the
@@ -1153,7 +1161,7 @@ http://www.percona.com/doc/percona-monitoring-plugins/
   This program is free software; you can redistribute it and/or modify it under
   the terms of the GNU General Public License as published by the Free Software
   Foundation, version 2.  You should have received a copy of the GNU General
-  Public License along with this program; if not, see
-  <https://www.gnu.org/licenses/>.
+  Public License along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
   
   
