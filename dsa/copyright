@@ -11,6 +11,7 @@ checks/dsa-check-running-kernel:# Copyright 2010 Uli Martens
 checks/dsa-check-running-kernel:# Copyright 2011 Alexander Reichle-Schmehl
 sbin/dsa-update-apt-status:# Copyright 2009 Peter Palfrader
 sbin/dsa-update-unowned-file-status:# Copyright 2012 Peter Palfrader
+sbin/dsa-wrap-nagios-check:# Copyright 2017 Peter Palfrader
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
