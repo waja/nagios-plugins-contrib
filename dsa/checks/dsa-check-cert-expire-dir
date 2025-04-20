@@ -52,7 +52,7 @@ cWARN=0
 cCRIT=0
 cUNKNOWN=0
 
-t=$(tempfile)
+t=$(mktemp)
 trap "rm -f '$t'" EXIT
 
 for i in "$DIR"/*.crt; do

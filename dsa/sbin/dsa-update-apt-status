@@ -78,7 +78,7 @@ if [ "$count" -ge "$UPDATE_RUNS" ]; then
 fi
 
 # run the apt check itself
-tmp=`tempfile`
+tmp=`mktemp`
 trap "rm -f '$tmp'" exit
 #/usr/share/dsa/apt-status-check --noupdate --timeout=600 > "$tmp"
 /usr/lib/nagios/plugins/dsa-check-packages > "$tmp"

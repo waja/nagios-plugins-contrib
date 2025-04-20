@@ -27,7 +27,7 @@ STATUS="${STATUSDIR}"/nouser
 
 mkdir -p "${STATUSDIR}"
 
-tmp=`tempfile`
+tmp=`mktemp`
 trap "rm -f '$tmp'" exit
 
 if command -v ionice >/dev/null 2>&1; then
