@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
  * License: GPLv3+
- * Copyright (c) 2014-2022 Davide Madrisan <davide.madrisan@gmail.com>
+ * Copyright (c) 2014-2024 Davide Madrisan <davide.madrisan@gmail.com>
  *
  * A library for parsing the sysfs filesystem
  *
@@ -172,8 +172,12 @@ sysfsparser_getline (const char *format, ...)
     plugin_error (STATE_UNKNOWN, errno, "vasprintf has failed");
   va_end (args);
 
+  dbg ("reading sysfs data: %s\n", filename);
   if ((fp = fopen (filename, "r")) == NULL)
-    return NULL;
+    {
+      dbg ("  \\ error: %s\n", strerror (errno));
+      return NULL;
+    }
 
   chread = getline (&line, &len, fp);
   fclose (fp);
@@ -185,14 +189,15 @@ sysfsparser_getline (const char *format, ...)
   if (line[len-1] == '\n')
     line[len-1] = '\0';
 
+  dbg ("  \\ \"%s\"\n", line);
   return line;
 }
 
-unsigned long long
-sysfsparser_getvalue (const char *format, ...)
+int
+sysfsparser_getvalue (unsigned long long *value, const char *format, ...)
 {
   char *line, *endptr, *filename;
-  unsigned long long value;
+  int retvalue = 0;
   va_list args;
 
   va_start (args, format);
@@ -201,15 +206,15 @@ sysfsparser_getvalue (const char *format, ...)
   va_end (args);
 
   if (NULL == (line = sysfsparser_getline ("%s", filename)))
-    return 0;
+    return -1;
 
   errno = 0;
-  value = strtoull (line, &endptr, 0);
+  *value = strtoull (line, &endptr, 0);
   if ((endptr == line) || (errno == ERANGE))
-    value = 0;
+    retvalue = -1;
 
   free (line);
-  return value;
+  return retvalue;
 }
 
 int
@@ -369,7 +374,8 @@ sysfsparser_thermal_sysfs_path ()
 int
 sysfsparser_thermal_get_critical_temperature (unsigned int thermal_zone)
 {
-  int i, crit_temp = -1;
+  int i, err;
+  unsigned long long crit_temp = 0;
 
   /* as far as I can see, the only possible trip points are:
    *  'critical', 'passive', 'active0', and 'active1'
@@ -390,9 +396,14 @@ sysfsparser_thermal_get_critical_temperature (unsigned int thermal_zone)
       if (!STRPREFIX (type, "critical"))
 	continue;
 
-      crit_temp = sysfsparser_getvalue (PATH_SYS_ACPI_THERMAL
-					"/thermal_zone%u/trip_point_%d_temp",
-					thermal_zone, i);
+      err = sysfsparser_getvalue (&crit_temp, PATH_SYS_ACPI_THERMAL
+				  "/thermal_zone%u/trip_point_%d_temp",
+				  thermal_zone, i);
+      if (err < 0)
+	plugin_error (STATE_UNKNOWN, 0,
+		      "an error has occurred while reading "
+		      PATH_SYS_ACPI_THERMAL
+		      "/thermal_zone%u/trip_point_%d_temp", thermal_zone, i);
 
       if (crit_temp > 0)
 	dbg ("a critical trip point has been found: %.2f degrees C\n",
@@ -426,7 +437,7 @@ sysfsparser_thermal_get_temperature (unsigned int selected_zone,
   struct dirent *de;
   bool found_data = false;
   unsigned int thermal_zone;
-  unsigned long max_temp = 0, temp = 0;
+  unsigned long long max_temp = 0, temp = 0;
 
   if (!sysfsparser_thermal_kernel_support ())
     plugin_error (STATE_UNKNOWN, 0, "no ACPI thermal support in kernel "
@@ -452,7 +463,7 @@ sysfsparser_thermal_get_temperature (unsigned int selected_zone,
 
       /* temperatures are stored in the files
        *  /sys/class/thermal/thermal_zone[0-9]/temp	  */
-      temp = sysfsparser_getvalue (PATH_SYS_ACPI_THERMAL "/%s/temp",
+      sysfsparser_getvalue (&temp, PATH_SYS_ACPI_THERMAL "/%s/temp",
 				   de->d_name);
       *type = sysfsparser_getline (PATH_SYS_ACPI_THERMAL "/%s/type",
 				   de->d_name);

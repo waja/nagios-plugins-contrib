@@ -33,10 +33,10 @@ MULTIBUILD_OPTS = \
 	--pckver $(PACKAGE_VERSION)
 
 TARGETS_ALPINE = \
-	alpine-3.16 \
-	alpine-3.17 \
-	alpine-3.18
-alpine-latest: alpine-3.18
+	alpine-3.18 \
+	alpine-3.19 \
+	alpine-3.20
+alpine-latest: alpine-3.20
 
 TARGETS_CENTOS_STREAM = \
 	centos-stream-8 centos-stream-9
@@ -50,9 +50,9 @@ debian-12: debian-bookworm
 debian-latest: debian-bookworm
 
 TARGETS_FEDORA = \
-	fedora-37 fedora-38 fedora-39 \
+	fedora-38 fedora-39 fedora-40 \
 	fedora-rawhide
-fedora-latest: fedora-39
+fedora-latest: fedora-40
 
 TARGETS_ROCKY = \
 	rockylinux-8 \

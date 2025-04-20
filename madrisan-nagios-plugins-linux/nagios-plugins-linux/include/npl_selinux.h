@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-/* xstrton.h -- string to double and long conversion with error checking
+/* npl_selinux.h -- a library for getting informations about SELinux
 
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -14,22 +14,14 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef XSTRTON_H_
-#define XSTRTON_H_
+#ifndef _NPL_SELINUX_H
+#define _NPL_SELINUX_H        1
 
-#include <stdint.h>
+#define SELINUXFS "selinuxfs"
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
+/* Return 2 if we are running on a SELinux kernel in enhanced mode,
+ * 1 if SELinux is running in permissive mode, 0 otherwise.
+ */
+int is_selinux_enabled (void);
 
-  int agetollint (const char *str, long long int *age, char **errmesg);
-  int sizetollint (const char *str, long long int *size, char **errmesg);
-  long strtol_or_err (const char *str, const char *errmesg);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif				/* XSTRTON_H_ */
+#endif /* npl_selinux.h */

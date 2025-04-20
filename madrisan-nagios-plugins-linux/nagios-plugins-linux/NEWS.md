@@ -1,3 +1,215 @@
+## Version 34 ("Heatwaves")
+### Aug 8th, 2024
+
+#### FIXES
+
+##### Build
+
+ * Missing header `npl_selinux.h` in Makefile (`noinst_HEADERS`).
+
+##### Libraries
+
+ * `lib/container`: docker API versions before v1.24 are deprecated, so 1.24 is set as the minimum version required.
+ * `lib/sysfsparser`: fix gcc warning: ‘crit_temp’ may be used uninitialized.
+ * `lib/sysfsparser`: better signature for function `sysfsparser_getvalue`.
+
+##### Contrib (Icinga2)
+
+ * Fix Icinga2 config for check_clock by Lorenz Kästle.
+   Previously the time reference value was evaluated only during the startup of Icinga 2 and therefore a fixed point in time.
+   This change makes it a function which gets evaluated every time the check is executed.
+
+#### ENHANCEMENTS
+
+##### Plugin check_ifmount
+
+ * Add the cmdline switch -l|--list to list the mounted filesystems. Same output as the 'mount' command executed without options).
+
+##### Plugin check_selinux
+
+ * New plugin `check_selinux` that checks if SELinux is enabled.
+
+##### Package creation
+
+ * Add Linux Alpine 3.20 and drop version 3.17
+ * Add Fedora 40, drop Fedora 38
+
+##### Documentation
+
+ * Fix typo
+ * Add a link to discussion #147
+ * Add a note on the Debian package nagios-plugins-contrib
+
+### GIT DIFF
+```
+$ git diff --stat 366a9d745fb62ccd64e05ea5916eb4988ec55d2b HEAD
+ .github/workflows/build-checks.yml          |   4 ++--
+ README.md                                   |  21 +++++++++++++++------
+ contrib/icinga2/CheckCommands.conf          |   2 +-
+ debian/Makefile.am                          |   3 ++-
+ debian/control                              |  13 ++++++++++++-
+ debian/copyright                            |   2 +-
+ debian/nagios-plugins-linux-selinux.install |   1 +
+ include/Makefile.am                         |   1 +
+ include/mountlist.h                         |   1 +
+ include/npl_selinux.h                       |  27 +++++++++++++++++++++++++++
+ include/sysfsparser.h                       |   4 ++--
+ include/testutils.h                         |   1 -
+ lib/Makefile.am                             |   1 +
+ lib/cpudesc.c                               |   5 ++++-
+ lib/cputopology.c                           |   5 ++++-
+ lib/meminfo.c                               |   4 ++--
+ lib/mountlist.c                             |  24 ++++++++++++++++++++++++
+ lib/npl_selinux.c                           |  61 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ lib/sysfsparser.c                           |  41 ++++++++++++++++++++++++++---------------
+ packages/Makefile.am                        |  10 +++++-----
+ packages/multibuild.sh                      |   8 +++++---
+ packages/specs/nagios-plugins-linux.spec.in |  12 ++++++++++++
+ plugins/Makefile.am                         |   3 +++
+ plugins/check_fc.c                          |  14 +++++++++++---
+ plugins/check_ifmountfs.c                   |  28 ++++++++++++++++++++++++----
+ plugins/check_network.c                     |   2 +-
+ plugins/check_selinux.c                     | 142 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ plugins/check_temperature.c                 |   7 ++++---
+ tests/Makefile.am                           |   3 +--
+ tests/ts_sysdockermemstat.data              |  40 ----------------------------------------
+ 30 files changed, 395 insertions(+), 95 deletions(-)
+```
+
+## Version 33 ("Śmigus-Dyngus")
+### Apr 1st, 2024
+
+#### BREAKING CHANGES
+
+##### Build
+
+ * lib/container: Podman 3.0+ API support.
+   This library and the check_container plugin are to be considered a PoC, i.e. not production-ready code.
+   Note that now varlink is no more a build requirement.
+   The plugins `check_docker` and `check_podman` were merged into `check_container`.
+ * rename `--with-systemd` to `--enable-systemd` for consistency with the other optional boolean options.
+
+#### FIXES
+
+##### Plugins
+
+ * check_container: passing on non running `--image` no longer produces a program core dump.
+ * check_memory: remove comma from perfdata (issues#140).
+   Thanks to [Grischa Zengel (ggzengel)](https://github.com/ggzengel) for reporting this problem.
+
+##### Libraries
+
+ * lib/*info_procps: fix build with `--enable-libprocps`.
+
+##### Tests
+
+ * tests: fix tests tslibxstrton_sizetollint and tslibpressure on 32-bit architectures.
+   See: https://bugs.gentoo.org/927490
+
+#### ENHANCEMENTS / CHANGES
+
+ * check_container: print short container names in the plugin perfdata.
+   Example: `docker.io/traefik:v2.9.8` becomes `traefik:v2.9.8`.
+
+##### Test framework
+
+ * ci: add gentoo to os matrix in github workflows.
+
+### GIT DIFF
+```
+ .github/workflows/build-checks.yml                               |  16 ++---
+ DEVELOPERS.md                                                    |  74 --------------------
+ README.md                                                        |  15 ++---
+ configure.ac                                                     |  91 +++++++++++--------------
+ debian/Makefile.am                                               |   2 +-
+ debian/changelog                                                 |   6 ++
+ debian/control                                                   |   8 +--
+ debian/nagios-plugins-linux-container.install                    |   1 +
+ debian/nagios-plugins-linux-docker.install                       |   1 -
+ include/Makefile.am                                              |   5 +-
+ include/{container_docker.h => container.h}                      |   8 ++-
+ include/container_podman.h                                       | 118 --------------------------------
+ include/json_helpers.h                                           |   2 +
+ include/xstrton.h                                                |   4 +-
+ lib/Makefile.am                                                  |  14 +---
+ lib/collection.c                                                 |   1 +
+ lib/container.c                                                  | 428 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ lib/container_docker_count.c                                     | 256 ---------------------------------------------------------------------
+ lib/container_docker_memory.c                                    | 175 ------------------------------------------------
+ lib/container_podman.c                                           | 374 -----------------------------------------------------------------------------------------------------
+ lib/container_podman_count.c                                     | 115 -------------------------------
+ lib/container_podman_stats.c                                     | 180 -------------------------------------------------
+ lib/json_helpers.c                                               | 128 ++++++++++++++++++++++++++++++++++-
+ lib/meminfo_procps.c                                             |   4 +-
+ lib/pressure.c                                                   |   1 +
+ lib/vminfo_procps.c                                              |   4 +-
+ lib/xstrton.c                                                    |  20 +++---
+ packages/specs/nagios-plugins-linux.spec.in                      |  48 +++++--------
+ plugins/Makefile.am                                              |  21 ++----
+ plugins/{check_docker.c => check_container.c}                    | 150 +++++++++++++++++------------------------
+ plugins/check_filecount.c                                        |  10 +--
+ plugins/check_podman.c                                           | 262 -----------------------------------------------------------------------
+ tests/Makefile.am                                                |  23 +++----
+ tests/ts_container_podman_GetContainerStats.data                 |   1 -
+ tests/ts_container_podman_ListContainers.data                    |   1 -
+ tests/ts_procpressurecpu.data                                    |   2 +-
+ tests/{tslibcontainer_docker_count.c => tslibcontainer_count.c}  |  43 ++++++------
+ tests/tslibcontainer_docker_memory.c                             | 116 --------------------------------
+ tests/tslibpressure.c                                            |   2 +-
+```
+
+## Version 32 ("Gematria")
+### Jan 25th, 2024
+
+#### FIXES
+
+##### Build
+
+ * configure: do not silently ignore missing libcurl and libvarlink.
+
+##### Libraries
+
+ * lib/netinfo-private: don't enforce nl_pid.
+   Thanks to [Yuri Konotopov (nE0sIghT)](https://github.com/nE0sIghT) for reporting and solving this problem in containerised environments.
+ * lib/netinfo-private: fix a Clang 17 warning.
+
+##### Plugin check_users
+
+ * check_users: fix an issue related to the Y2038 Unix bug.
+ * check_cpufreq: wrong factor in check_cpufreq for -G.
+   Thanks to [Grischa Zengel (ggzengel)](https://github.com/ggzengel) for the bug report.
+
+#### ENHANCEMENTS / CHANGES
+
+##### Package creation
+
+ * Add Fedora 39 and drop support for Fedora 36.
+ * Add Linux Alpine 3.18 and 3.19 and drop support for Linux Alpine 3.14-3.16.
+ * Add Rocky Linux distribution.
+ * Fix build of debian packages.
+
+##### Test framework
+
+ * Enable systemd library requirement in the GitHub workflow.
+ * Update Linux releases for tests execution in the GitHub workflows.
+
+### GIT DIFF
+```
+ .github/workflows/build-checks.yml          | 17 +++++++----------
+ AUTHORS                                     |  5 +++++
+ README.md                                   | 37 +++++++++++++++++++++----------------
+ configure.ac                                | 22 ++++++++++++++++++++--
+ debian/rules                                |  2 +-
+ lib/netinfo-private.c                       |  4 ++--
+ packages/Makefile.am                        | 35 +++++++++++++++++++++++------------
+ packages/docker-shell-helpers               |  2 +-
+ packages/multibuild.sh                      | 20 +++++++++++++++-----
+ packages/specs/nagios-plugins-linux.spec.in |  8 ++++++--
+ plugins/check_cpufreq.c                     |  2 +-
+ plugins/check_users.c                       | 70 ++++++++++++++++++++++++++++++++++++++++++++++++----------------------
+ 12 files changed, 150 insertions(+), 74 deletions(-)
+```
+
 ## Version 31 ("Counter-intuitive")
 ### Aug 28th, 2022
 

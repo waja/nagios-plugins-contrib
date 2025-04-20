@@ -16,12 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         container:
-          - 'alpine:3.17'
-          - 'alpine:3.18'
+          - 'alpine:3.19'
+          - 'alpine:3.20'
           - 'debian:11'
           - 'debian:12'
-          - 'fedora:38'
           - 'fedora:39'
+          - 'fedora:40'
+          - 'gentoo/stage3:latest'
           - 'ubuntu:20.04'
           - 'ubuntu:22.04'
 
@@ -40,24 +41,19 @@ jobs:
               apt-get update -q
               apt-get install -q -y --no-install-recommends autoconf automake bzip2 gcc libcurl4-gnutls-dev libsystemd-dev libtool m4 make pkg-config xz-utils
             ;;
+            gentoo*)
+              :
+            ;;
             fedora*)
               dnf -y update
-              dnf -y install autoconf automake bzip2 diffutils gcc glibc-devel libcurl-devel libvarlink-devel libtool make m4 systemd-devel xz
+              dnf -y install autoconf automake bzip2 diffutils gcc glibc-devel libcurl-devel libtool make m4 systemd-devel xz
             ;;
           esac
 
       - id: configure
         run: |
           autoreconf --install
-          case "${{ matrix.container }}" in
-            alpine*|debian*|ubuntu*)
-              ./configure --enable-libcurl --enable-debug
-            ;;
-            # libvarlink is only available in Fedora
-            *)
-              ./configure --enable-libcurl --enable-libvarlink --enable-debug
-            ;;
-          esac
+          ./configure --enable-libcurl --enable-debug
 
       - id: make
         run: |

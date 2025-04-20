@@ -41,6 +41,7 @@ Requires: nagios-plugins-linux-network
 Requires: nagios-plugins-linux-paging
 Requires: nagios-plugins-linux-pressure
 Requires: nagios-plugins-linux-readonlyfs
+Requires: nagios-plugins-linux-selinux
 Requires: nagios-plugins-linux-swap
 Requires: nagios-plugins-linux-tcpcount
 Requires: nagios-plugins-linux-temperature
@@ -56,6 +57,15 @@ Group: Applications/System
 
 %description clock
 This Nagios plugin returns the number of seconds elapsed between local time and Nagios time.
+
+%if 0%{?have_libcurl}
+%package container
+Summary: Nagios plugins for Linux - experimental plugin check_container
+Group: Applications/System
+
+%description container
+This Nagios plugin checks the memory and the number of running docker and podman containers.
+%endif
 
 %package cpu
 Summary: Nagios plugins for Linux - check_cpu
@@ -77,15 +87,6 @@ Group: Applications/System
 
 %description cswch
 This Nagios plugin monitors the total number of context switches per second across all CPUs.
-
-%if 0%{?have_libcurl}
-%package docker
-Summary: Nagios plugins for Linux - experimental plugin check_docker
-Group: Applications/System
-
-%description docker
-This Nagios plugin checks the memory and the number of running docker container.
-%endif
 
 %package fc
 Summary: Nagios plugins for Linux - check_fc
@@ -164,15 +165,6 @@ Group: Applications/System
 %description paging
 This Nagios plugin checks the memory and swap paging.
 
-%if 0%{?have_libvarlink}
-%package podman
-Summary: Nagios plugins for Linux - experimental plugin check_podman
-Group: Applications/System
-
-%description podman
-This Nagios plugin returns some runtime metrics of Podman containers.
-%endif
-
 %package pressure
 Summary: Nagios plugins for Linux - check_pressure
 Group: Applications/System
@@ -186,6 +178,13 @@ Group: Applications/System
 
 %description readonlyfs
 This Nagios plugin checks for readonly filesystems.
+
+%package selinux
+Summary: Nagios plugins for Linux - check_selinux
+Group: Applications/System
+
+%description selinux
+This Nagios plugin checks if SELinux is enabled.
 
 %package swap
 Summary: Nagios plugins for Linux - check_swap
@@ -228,9 +227,6 @@ This Nagios plugin displays the number of users that are currently logged on.
 %build
 %configure --libexecdir=%{_libdir}/nagios/plugins \
    --enable-libcurl \
-%if 0%{?have_libvarlink}
-   --enable-libvarlink \
-%endif
 %if 0%{?rhel} < 7
    --with-socketfile=/var/run/multipathd.sock
 %endif
@@ -249,6 +245,12 @@ make DESTDIR=%{buildroot} install
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_clock
 
+%if 0%{?have_libcurl}
+%files container
+%defattr(-,root,root)
+%{_libdir}/nagios/plugins/check_container
+%endif
+
 %files cpu
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_cpu
@@ -260,12 +262,6 @@ make DESTDIR=%{buildroot} install
 %files cswch
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_cswch
-
-%if 0%{?have_libcurl}
-%files docker
-%defattr(-,root,root)
-%{_libdir}/nagios/plugins/check_docker
-%endif
 
 %files fc
 %defattr(-,root,root)
@@ -312,12 +308,6 @@ make DESTDIR=%{buildroot} install
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_paging
 
-%if 0%{?have_libvarlink}
-%files podman
-%defattr(-,root,root)
-%{_libdir}/nagios/plugins/check_podman
-%endif
-
 %files pressure
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_pressure
@@ -325,6 +315,10 @@ make DESTDIR=%{buildroot} install
 %files readonlyfs
 %defattr(-,root,root)
 %{_libdir}/nagios/plugins/check_readonlyfs
+
+%files selinux
+%defattr(-,root,root)
+%{_libdir}/nagios/plugins/check_selinux
 
 %files swap
 %defattr(-,root,root)

@@ -4,13 +4,9 @@
 
 ![Release Status](https://img.shields.io/badge/status-stable-brightgreen.svg)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://spdx.org/licenses/GPL-3.0-only.html)
-[![Download Latest Release](https://img.shields.io/badge/download-latest--tarball-blue.svg)](https://github.com/madrisan/nagios-plugins-linux/releases/download/v31/nagios-plugins-linux-31.tar.xz)
+[![Download Latest Release](https://img.shields.io/badge/download-latest--tarball-blue.svg)](https://github.com/madrisan/nagios-plugins-linux/releases/download/v32/nagios-plugins-linux-32.tar.xz)
 [![Say Thanks!](https://img.shields.io/badge/Say%20Thanks-!-1EAEDB.svg)](https://saythanks.io/to/madrisan)
-
-[![Build Status](https://travis-ci.org/madrisan/nagios-plugins-linux.svg?branch=master)](https://travis-ci.org/madrisan/nagios-plugins-linux)
 [![Coverity Scan Build Status](https://img.shields.io/coverity/scan/3779.svg)](https://scan.coverity.com/projects/madrisan-nagios-plugins-linux)
-[![Total Alerts](https://img.shields.io/lgtm/alerts/g/madrisan/nagios-plugins-linux.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/madrisan/nagios-plugins-linux/alerts/)
-[![Language Grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/madrisan/nagios-plugins-linux.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/madrisan/nagios-plugins-linux/context:cpp)
 
 <a href='https://ko-fi.com/K3K57TH3' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://az743702.vo.msecnd.net/cdn/kofi2.png?v=0' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 <a href='http://amzn.eu/8axPDQ1'><img height='36' src='https://images.freeimages.com/fic/images/icons/2229/social_media_mini/48/amazon.png' border='0' alt='Wish List at Amazon.fr' /></a>
@@ -20,12 +16,12 @@
 Here is the list of the available plugins:
 
 * **check_clock** - returns the number of seconds elapsed between local time and Nagios server time
+* **check_container** - checks docker/podman containers :warning: *pre-alpha*, requires *libcurl* version 7.40.0+
 * **check_cpu** - checks the CPU (user mode) utilization
 * **check_cpufreq** - displays the CPU frequency characteristics
 * **check_cswch** - checks the total number of context switches across all CPUs
-* **check_docker** - checks the number of running docker containers (:warning: *pre-alpha*, requires *libcurl* version 7.40.0+)
 * **check_fc** - monitors the status of the fiber status ports
-* **check_filecount** - checks the number of files found in one or more directories :new:
+* **check_filecount** - checks the number of files found in one or more directories
 * **check_ifmountfs** - checks whether the given filesystems are mounted
 * **check_intr** - monitors the total number of system interrupts
 * **check_iowait** - monitors the I/O wait bottlenecks
@@ -39,9 +35,9 @@ Here is the list of the available plugins:
   * check_network_errors
   * check_network_multicast
 * **check_paging** - checks the memory and swap paging
-* **check_pressure** - checks Linux Pressure Stall Information (PSI) data :new:
-* **check_podman** - monitor the status of podman containers (:warning: *alpha*, requires *libvarlink*)
+* **check_pressure** - checks Linux Pressure Stall Information (PSI) data
 * **check_readonlyfs** - checks for readonly filesystems
+* **check_selinux** - checks if SELinux is enabled :new:
 * **check_swap** - checks the swap usage
 * **check_tcpcount** - checks the tcp network usage
 * **check_temperature** - monitors the hardware's temperature
@@ -95,13 +91,9 @@ the command `make check` (or `VERBOSE=1 make check`) and, if the llvm tool
 `scan-build` is installed on your system, a `make -C tests check-clang-checker`
 to get a static code analysis report (for developers only).
 
-_Note_: you can also pass the _experimental_ option `--enable-libprocps` to
-`configure` for getting the informations about memory and swap usage through
-the API of the library `libproc-2.so`
-([procps newlib](https://gitlab.com/procps-ng/procps/tree/newlib)).
-This library, as stated in the official notes, is probably not ready for the
-main path of most distributions, but its first version (v4.0.0) has been
-released on 22 March 2022 as a sort of release preview.
+_Note_: you can also pass the option `--enable-libprocps` to `configure` for
+getting the informations about memory and swap usage through the API of the
+library `libproc2.so` [procps](https://gitlab.com/procps-ng/procps/)).
 
 ## Supported Platforms and Linux distributions
 
@@ -113,14 +105,14 @@ This package is known to compile with:
 * gcc 4.1 (RHEL 5 / CentOS 5),
 * gcc 4.4 (RHEL6 / CentOS 6),
 * gcc 4.8 (RHEL7 / CentOS 7),
-* gcc 3.x, 5.1, 5.3, 6.3, 7-13 (openmamba GNU/Linux, Debian 8+, Fedora 25+),
+* gcc 3.x, 5.1, 5.3, 6.3, 7-14 (openmamba GNU/Linux, Debian 8+, Fedora 25+),
 * clang 3.7, 3.8, 4.9, 5, 6, 7, 8, 10-17 (openmamba GNU/Linux, Fedora 25+),
 
 List of the Linux kernels that have been successfully tested:
 * 2.6.18, 2.6.32,
 * 3.10, 3.14, 3.18,
 * 4.2, 4.4, 4,9, 4.14, 4.15, 4.16, 4.19
-* 5.6, 5.7, 5.8, 5.12-5.18, 6.1-6.5
+* 5.6, 5.7, 5.8, 5.12-5.18, 6.1-6.8
 
 The Nagios Plugins Linux are regularly tested on
  * Alpine Linux (musl libc),
@@ -132,17 +124,17 @@ The `.apk`, `.rpm` and `.deb` packages for Alpine, CentOS/RHEL, Debian, and Fedo
 
 Command              | Distribution
 -------------------- | ------------
-Alpine 3.16          | `make -C packages alpine-3.16`
-Alpine 3.17          | `make -C packages alpine-3.17`
 Alpine 3.18          | `make -C packages alpine-3.18`
+Alpine 3.19          | `make -C packages alpine-3.19`
+Alpine 3.20          | `make -C packages alpine-3.20`
 CentOS Stream 8      | `make -C packages centos-stream-8`
 CentOS Stream 9      | `make -C packages centos-stream-9`
 Debian 10 (Buster)   | `make -C packages debian-buster`
 Debian 11 (Bullseye) | `make -C packages debian-bullseye`
 Debian 12 (Bookworm) | `make -C packages debian-bookworm`
-Fedora 37            | `make -C packages fedora-37`
 Fedora 38            | `make -C packages fedora-38`
 Fedora 39            | `make -C packages fedora-39`
+Fedora 40            | `make -C packages fedora-40`
 Fedora Rawhide       | `make -C packages fedora-rawhide`
 Rocky Linux 8        | `make -C packages rockylinux-8`
 Rocky Linux 9        | `make -C packages rockylinux-9`
@@ -158,13 +150,21 @@ _Note_: the previous make commands can end with a `permission denied` error if *
 In this case you can temporarily disable *selinux* by executing as root the command `setenforce 0`
 (or maybe share a better solution!).
 
+## Debian Package `nagios-plugins-contrib`
+
+The `Nagios Plugin Linux` source code has been merged with the Debian package [`nagios-plugins-contrib`](https://sources.debian.org/src/nagios-plugins-contrib/)
+but only the `check_memory` plugin is provided by the binary package shipped by Debian,
+starting with the [Debian Bookworm](https://packages.debian.org/bookworm/nagios-plugins-contrib) version.
+
+For more details, see GitHub [discussion #147](https://github.com/madrisan/nagios-plugins-linux/discussions/147).
+
 ## Gentoo Package
 
 The plugins are available [in the Gentoo tree](https://packages.gentoo.org/packages/net-analyzer/nagios-plugins-linux-madrisan). They can be installed by running:
 ```
 emerge -av net-analyzer/nagios-plugins-linux-madrisan
 ```
-The USE flags `curl` and `varlink` are required to respectively build `check_docker` and `check_podman`.
+The USE flag `curl` is required to build `check_container`.
 
 ## Bugs
 

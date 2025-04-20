@@ -337,7 +337,7 @@ AC_CHECK_DECLS([CPU_ALLOC], [], [],
 
 dnl Check for libcurl
 AC_ARG_ENABLE([libcurl],
-  AS_HELP_STRING([--enable-libcurl], [Enable libcurl]))
+  AS_HELP_STRING([--enable-libcurl], [enable libcurl]))
 AS_IF([test "x$enable_libcurl" = "xyes"], [
   LIBCURL_CHECK_CONFIG([], [7.40.0], [],
     [AC_MSG_ERROR([Missing required libcurl >= 7.40.0])])
@@ -346,53 +346,41 @@ AS_IF([test "x$enable_libcurl" = "xyes"], [
   AM_CONDITIONAL(HAVE_LIBCURL, [test "$libcurl_cv_lib_curl_usable" = "yes"])
 ], [AM_CONDITIONAL(HAVE_LIBCURL, false)])
 
+dnl Check for the procps newlib
+have_libprocps=no
+AC_ARG_ENABLE([libprocps],
+  AS_HELP_STRING([--enable-libprocps], [enable optional LIBPROC2 support]),
+    [enable_libprocps=$enableval],[enable_libprocps=no])
+AS_IF([test "x$enable_libprocps" = "xyes"], [
+  PKG_CHECK_EXISTS([libproc2],
+    [PKG_CHECK_MODULES(LIBPROCPS, [libproc2 >= 4.0.0],
+      [AC_DEFINE(HAVE_LIBPROCPS, 1, [Define if libproc2 (procps) is available])
+       have_libprocps=yes],
+      AC_MSG_ERROR([*** libproc2 (procps) version >= 4.0.0 not found]))])
+  AC_SUBST(LIBPROCPS_LIBS)
+  AC_SUBST(LIBPROCPS_CFLAGS)
+  AS_IF([test "x$have_libprocps" = "xno" -a "x$enable_libprocps" = "xyes"],
+        [AC_MSG_ERROR([*** libproc2 (procps) >= 4.0.0 support requested, but libraries not found])])
+])
+AM_CONDITIONAL(HAVE_LIBPROCPS, [test "$have_libprocps" = "yes"])
+
 dnl Check for systemd-login libraries
-AC_ARG_WITH([systemd],
-  AS_HELP_STRING([--without-systemd], [do not build with systemd support]),
-  [], [with_systemd=check]
+AC_ARG_ENABLE([systemd],
+  AS_HELP_STRING([--enable-systemd], [enable systemd related features]),
+  [], [enable_systemd=check]
 )
 have_systemd=no
-AS_IF([test "x$with_systemd" != "xno"], [
+AS_IF([test "x$enable_systemd" != "xno"], [
   PKG_CHECK_MODULES([SYSTEMD], [libsystemd], [have_systemd=yes], [have_systemd=no])
-  AS_CASE([$with_systemd:$have_systemd],
+  AS_CASE([$enable_systemd:$have_systemd],
     [yes:no],
       [AC_MSG_ERROR([systemd expected but libsystemd not found])],
     [*:yes],
        AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define if libsystemd is available])
-       AC_DEFINE([USE_SYSTEMD], [1], [Define if systemd support is wanted ])
+       AC_DEFINE([USE_SYSTEMD], [1], [Define if systemd support is wanted])
   )
 ])
 AM_CONDITIONAL([HAVE_SYSTEMD], [test "x$have_systemd" = "xyes"])
-
-dnl Check for libvarlink
-AC_ARG_ENABLE([libvarlink],
-  AS_HELP_STRING([--enable-libvarlink], [Enable libvarlink]))
-AS_IF([test "x$enable_libvarlink" = "xyes"], [
-  PKG_CHECK_EXISTS([libvarlink],
-    [PKG_CHECK_MODULES(LIBVARLINK, [libvarlink >= 18],
-      [AC_DEFINE(HAVE_LIBVARLINK, 1, [Define if libvarlink is available])
-       have_libvarlink=yes],
-      [AC_MSG_ERROR([*** libvarlink version 18 or better not found])])],
-    [AC_MSG_ERROR([*** libvarlink not found])])])
-AM_CONDITIONAL(HAVE_LIBVARLINK, [test "$have_libvarlink" = "yes"])
-
-dnl Check for the procps newlib
-have_libprocps=no
-AC_ARG_ENABLE([libprocps],
-  AS_HELP_STRING([--enable-libprocps], [enable optional LIBPROCPS >= 4.0.0 support]),
-    [enable_libprocps=$enableval],[enable_libprocps=no])
-AS_IF([test "x$enable_libprocps" = "xyes"], [
-  PKG_CHECK_EXISTS([libprocps],
-    [PKG_CHECK_MODULES(LIBPROCPS, [libprocps >= 4.0.0],
-      [AC_DEFINE(HAVE_LIBPROCPS, 1, [Define if libprocps >= 4.0.0 is available])
-       have_libprocps=yes],
-      AC_MSG_ERROR([*** libprocps version >= 4.0.0 not found]))])
-  AC_SUBST(LIBPROCPS_LIBS)
-  AC_SUBST(LIBPROCPS_CFLAGS)
-  AS_IF([test "x$have_libprocps" = "xno" -a "x$enable_libprocps" = "xyes"],
-        [AC_MSG_ERROR([*** LIBPROCPS >= 4.0.0 support requested, but libraries not found])])
-])
-AM_CONDITIONAL(HAVE_LIBPROCPS, [test "$have_libprocps" = "yes"])
 
 dnl Add the option '--with-proc-meminfo=PATH'
 AC_ARG_WITH(proc-meminfo,
@@ -433,16 +421,16 @@ AC_ARG_WITH(
   [DOCKER_SOCKET="$with_dockersocket"])
 AC_SUBST(DOCKER_SOCKET)
 
-dnl Add the option: '--with-varlink-address'
-VARLINK_ADDRESS="unix:/run/podman/io.podman"
+dnl Add the option: '--with-podman-socket'
+PODMAN_SOCKET="/run/podman/podman.sock"
 AC_ARG_WITH(
-  [varlinkaddress],
+  [podmansocket],
   [AS_HELP_STRING(
-    [--with-varlink-address],
-    [use a different address for varlink socket
-     (default is unix:/run/podman/io.podman)])],
-  [VARLINK_ADDRESS="$with_varlinkaddress"])
-AC_SUBST(VARLINK_ADDRESS)
+    [--with-podman-socket],
+    [use a different podman socket
+     (default is /run/podman/podman.sock)])],
+  [PODMAN_SOCKET="$with_podmansocket"])
+AC_SUBST(PODMAN_SOCKET)
 
 dnl Add the option: '--with-socketfile'
 MULTIPATHD_SOCKET="@/org/kernel/linux/storage/multipathd"
@@ -572,6 +560,7 @@ echo "  hardening enabled  = $use_hardening"
 echo "  werror enabled     = $enable_werror"
 echo "  with docker socket = $DOCKER_SOCKET"
 echo "  with libprocps     = $enable_libprocps"
+echo "  with podman socket = $PODMAN_SOCKET"
 echo "  with socketfile    = $MULTIPATHD_SOCKET"
 echo "  with test suite    = $with_test_suite"
 echo
@@ -591,16 +580,14 @@ if test "$have_libprocps" = "yes"; then
 fi
 
 if test "$libcurl_cv_lib_curl_usable" = "yes"; then
-  echo "Optional curl library support is enabled (required by check_docker):"
+  echo "Optional curl library support is enabled (required by check_container):"
   echo "  LIBCURL_CPPFLAGS   = $LIBCURL_CPPFLAGS"
   echo "  LIBCURL            = $LIBCURL"
   echo
 fi
 
-if test "$have_libvarlink" = "yes"; then
-  echo "Optional varlink library support is enabled (required by check_podman):"
-  echo "  LIBVARLINK_CFLAGS  = $LIBVARLINK_CFLAGS"
-  echo "  LIBVARLINK_LIBS    = -lvarlink"
-  echo "  VARLINK_ADDRESS    = $VARLINK_ADDRESS"
-  echo
+if test "$have_systemd" = "yes"; then
+  echo "Optional systemd library support is enabled:"
+  echo "  SYSTEMD_CFLAGS    = $SYSTEMD_CFLAGS"
+  echo "  SYSTEMD_LIBS      = $SYSTEMD_LIBS"
 fi

@@ -45,8 +45,7 @@ AM_CFLAGS = $(LIBPROCPS_CFLAGS)
 AM_LDFLAGS = $(LIBPROCPS_LIBS)
 
 test_programs = \
-	tslibcontainer_docker_count \
-	tslibcontainer_docker_memory \
+	tslibcontainer_count \
 	tslibfiles_age \
 	tslibfiles_filecount \
 	tslibfiles_hiddenfile \
@@ -59,8 +58,8 @@ test_programs = \
 	tslibperfdata \
 	tslibpressure \
 	tsliburlencode \
-	tslibxstrton_agetoint64 \
-	tslibxstrton_sizetoint64
+	tslibxstrton_agetollint \
+	tslibxstrton_sizetollint
 if !HAVE_LIBPROCPS
 test_programs += \
 	tslibvminfo
@@ -86,10 +85,8 @@ LDADDS = $(top_builddir)/lib/libutils.a
 TSLIBS_LDFLAGS = -module -avoid-version \
 	-rpath /evil/libtool/hack/to/force/shared/lib/creation
 
-tslibcontainer_docker_count_SOURCES = $(test_utils) tslibcontainer_docker_count.c
-tslibcontainer_docker_count_LDADD = $(LDADDS)
-tslibcontainer_docker_memory_SOURCES = $(test_utils) tslibcontainer_docker_memory.c
-tslibcontainer_docker_memory_LDADD = $(LDADDS)
+tslibcontainer_count_SOURCES = $(test_utils) tslibcontainer_count.c
+tslibcontainer_count_LDADD = $(LDADDS)
 
 tslibfiles_age_SOURCES = $(test_utils) tslibfiles_age.c
 tslibfiles_age_LDADD = $(LDADDS)
@@ -122,10 +119,10 @@ tslibpressure_LDADD = $(LDADDS)
 tsliburlencode_SOURCES = $(test_utils) tsliburlencode.c
 tsliburlencode_LDADD = $(LDADDS)
 
-tslibxstrton_agetoint64_SOURCES = $(test_utils) tslibxstrton_agetoint64.c
-tslibxstrton_agetoint64_LDADD = $(LDADDS)
-tslibxstrton_sizetoint64_SOURCES = $(test_utils) tslibxstrton_sizetoint64.c
-tslibxstrton_sizetoint64_LDADD = $(LDADDS)
+tslibxstrton_agetollint_SOURCES = $(test_utils) tslibxstrton_agetollint.c
+tslibxstrton_agetollint_LDADD = $(LDADDS)
+tslibxstrton_sizetollint_SOURCES = $(test_utils) tslibxstrton_sizetollint.c
+tslibxstrton_sizetollint_LDADD = $(LDADDS)
 
 tslibvminfo_SOURCES = $(test_utils) tslibvminfo.c
 tslibvminfo_LDADD = $(LDADDS)
@@ -171,11 +168,8 @@ TESTS = $(test_programs)
 
 dist_noinst_DATA = \
 	ts_container_docker.data \
-	ts_container_podman_GetContainerStats.data \
-	ts_container_podman_ListContainers.data \
 	ts_procmeminfo.data \
 	ts_procpressurecpu.data \
 	ts_procpressureio.data \
 	ts_procstat.data \
-	ts_procvmstat.data \
-	ts_sysdockermemstat.data
+	ts_procvmstat.data
