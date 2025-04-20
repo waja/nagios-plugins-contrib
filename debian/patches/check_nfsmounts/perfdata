@@ -1,0 +1,11 @@
+--- a/check_nfsmounts/check_nfsmounts
++++ b/check_nfsmounts/check_nfsmounts
+@@ -163,7 +163,7 @@
+ }
+ my $avgage=$agetot/$x;
+ 
+-my $perfdata=sprintf("maxtime=%9.7f;avgtime=%9.7f;mountpoints=$x",$maxage,$avgage);
++my $perfdata=sprintf(" maxtime=%9.7f;avgtime=%9.7f;mountpoints=$x",$maxage,$avgage);
+ 
+ if(@warnings) {
+   print "NFS WARNING: @warnings|$perfdata\n";
