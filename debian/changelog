@@ -1,8 +1,34 @@
-nagios-plugins-contrib (46.20240418) UNRELEASED; urgency=medium
+nagios-plugins-contrib (47.20250420) unstable; urgency=medium
 
-  * 
+  [ Evgeni Golov ]
+  * [8a9233b] check_libs_ng: catch FileNotFoundErrors when trying to read the
+    map files (Closes: #1070073)
+  * [9416e7f] check_libs_ng: use iglob instead of glob
 
- -- Jan Wagner <waja@cyconet.org>  Wed, 17 Apr 2024 16:37:34 +0200
+  [ Jan Wagner ]
+  * [ed21d22] check_ssl_cert: Update to 2.82.0
+
+  [ Bas Couwenberg ]
+  * [316e815] Bump Standards-Version to 4.7.0, no changes.
+  * [6924874] Add patch to fix check_running_kernel on riscv64 with vmlinux
+    images. (closes: #1096198)
+  * [072def6] Auto update of debian/copyright
+  * [5f7611d] Bump Standards-Version to 4.7.2, no changes.
+  * [bd11afa] Fix old FSF address in copyright file.
+
+  [ Jan Wagner ]
+  * [b9015b6] check_rbl: Update to 1.7.7
+  * [709eb0b] check_rbl: Remove useless source code of version 1.7.2
+  * [448ef4f] Refresh d/p/check_rbl/additional_rbls
+  * [00b764b] Adding d/p/check_rbl/fix_pod fixing encoding issues
+  * [72eb2f0] check_ssl_cert: Update to 2.92.0
+  * [463396b] Update check-cert-expire-dir, check-packages, update-apt-status and
+    update-unowned-file-status from dsa upstream
+  * [8619dd8] Adding d/p/check_nfsmounts/perfdata fixing perfdata
+    (Closes: #1101154)
+  * [20a93f3] nagios-plugins-linux: Update to v34
+
+ -- Jan Wagner <waja@cyconet.org>  Sun, 20 Apr 2025 21:02:26 +0200
 
 nagios-plugins-contrib (46.20240417) unstable; urgency=medium
 
